@@ -36,6 +36,11 @@ async def _run_pipeline(target_id: int) -> None:
         for account in accounts:
             await _scrape_account(browser, target_id, account)
 
+    from core.scraper.truncation import prepare_llm_payload
+
+    payload = await asyncio.to_thread(prepare_llm_payload, target_id)
+    logger.info("LLM payload ready: ~%d tokens", len(payload) // 4)
+
     await asyncio.to_thread(
         Target.objects.filter(id=target_id).update,
         status=Target.Status.EVALUATING,
