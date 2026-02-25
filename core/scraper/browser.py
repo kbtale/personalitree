@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import random
 from contextlib import asynccontextmanager
 
 from playwright.async_api import Browser, Page, async_playwright
@@ -8,11 +10,14 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_VIEWPORT = {"width": 1920, "height": 1080}
 
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/122.0.0.0 Safari/537.36"
-)
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+]
 
 
 class StealthBrowser:
@@ -49,14 +54,27 @@ class StealthBrowser:
         logger.info("StealthBrowser closed")
 
     async def new_page(self) -> Page:
-        """Create a new browser page with stealth patches applied."""
+        """Create a new browser page with a random user-agent and stealth patches."""
         context = await self._browser.new_context(
             viewport=DEFAULT_VIEWPORT,
-            user_agent=DEFAULT_USER_AGENT,
+            user_agent=random.choice(USER_AGENTS),
         )
         page = await context.new_page()
         await stealth_async(page)
         return page
+
+    @staticmethod
+    async def random_delay(min_s: float = 1.0, max_s: float = 3.5) -> None:
+        """Random pause to simulate human reaction time between actions."""
+        await asyncio.sleep(random.uniform(min_s, max_s))
+
+    @staticmethod
+    async def human_scroll(page: Page, steps: int = 5) -> None:
+        """Scroll down a page in randomized steps to simulate reading."""
+        for _ in range(steps):
+            distance = random.randint(200, 600)
+            await page.mouse.wheel(0, distance)
+            await asyncio.sleep(random.uniform(0.3, 1.2))
 
 
 def _get_proxy_url() -> str | None:
