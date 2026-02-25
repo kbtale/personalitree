@@ -1,0 +1,17 @@
+# ============================================================
+# PersonaliTree – .dockerignore
+# ============================================================
+
+.git
+.gitignore
+.env
+.env.example
+*.md
+__pycache__
+*.pyc
+*.pyo
+.agents
+.vscode
+.idea
+node_modules
+postgres_data

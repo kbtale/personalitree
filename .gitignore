@@ -1,0 +1,60 @@
+# ============================================================
+# PersonaliTree – .gitignore (Strict)
+# ============================================================
+
+# --- Planning Documents (User Request) ---
+project.md
+roadmap.md
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+nosetests.xml
+coverage.xml
+.coverage
+.cache
+.pytest_cache/
+
+# --- Environments & Secrets ---
+.env
+.venv/
+venv/
+env/
+ENV/
+
+# --- Databases & Local Data ---
+postgres_data/
+*.sqlite3
+*.db
+
+# --- Logs ---
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- IDE & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+
+# --- OS Specific ---
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# --- Agentic Tools / Artificial Intelligence ---
+.agents/
+skills-lock.json
+.gemini/
+.anthropic/
+
