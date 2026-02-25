@@ -66,8 +66,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # --- Third-Party ---
     "django_q",
-    # --- Project Apps (added as they are created) ---
-    # "core",
+    # --- Project Apps ---
+    "core",
 ]
 
 
