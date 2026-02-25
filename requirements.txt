@@ -9,7 +9,6 @@ django-q2>=1.7,<2.0
 # Scraping Engine
 playwright>=1.49,<2.0
 playwright-stealth>=1.0,<2.0
-beautifulsoup4>=4.12,<5.0
 lxml>=5.0,<6.0
 
 # AI / LLM SDKs
@@ -20,3 +19,4 @@ google-generativeai>=0.8,<1.0
 # Utilities
 python-dotenv>=1.0,<2.0
 requests>=2.32,<3.0
+setuptools>=70.0,<81.0
