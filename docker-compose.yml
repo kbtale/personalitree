@@ -16,8 +16,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-personalitree}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # No host port mapping, db is only reachable within the Docker network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-personalitree} -d ${POSTGRES_DB:-personalitree}"]
       interval: 5s
@@ -39,7 +38,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "8100:8000"
     depends_on:
       db:
         condition: service_healthy
