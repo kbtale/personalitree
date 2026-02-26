@@ -113,24 +113,34 @@ ASGI_APPLICATION = "personalitree.asgi.application"
 
 
 # ============================================================
-# 5. Database, PostgreSQL via environment variables
+# 5. Database — SQLite (default) or PostgreSQL
 # ============================================================
-# The 'db' service hostname comes from docker-compose service name.
+# Set DB_ENGINE=postgresql in .env to use PostgreSQL via Docker.
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": env("POSTGRES_DB", "personalitree"),
-        "USER": env("POSTGRES_USER", "personalitree"),
-        "PASSWORD": env("POSTGRES_PASSWORD", "personalitree"),
-        "HOST": env("POSTGRES_HOST", "db"),       # docker-compose service name
-        "PORT": env("POSTGRES_PORT", "5432"),
-        "CONN_MAX_AGE": 600,                      # keep connections alive 10 min
-        "OPTIONS": {
-            "connect_timeout": 10,
-        },
+DB_ENGINE = env("DB_ENGINE", "sqlite")
+
+if DB_ENGINE == "postgresql":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": env("POSTGRES_DB", "personalitree"),
+            "USER": env("POSTGRES_USER", "personalitree"),
+            "PASSWORD": env("POSTGRES_PASSWORD", "personalitree"),
+            "HOST": env("POSTGRES_HOST", "db"),
+            "PORT": env("POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": 600,
+            "OPTIONS": {
+                "connect_timeout": 10,
+            },
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # ============================================================
