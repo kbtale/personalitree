@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     BurnerAccount,
     DiscoveredAccount,
+    ProfileResult,
     QuestionnaireResponse,
     RawScrape,
     Settings,
@@ -13,20 +14,21 @@ from .models import (
 class DiscoveredAccountInline(admin.TabularInline):
     model = DiscoveredAccount
     extra = 0
-    readonly_fields = ("verification_confidence",)
 
 
 class RawScrapeInline(admin.TabularInline):
     model = RawScrape
     extra = 0
-    readonly_fields = ("scraped_at",)
-    fields = ("platform_name", "scraped_at")
 
 
 class QuestionnaireResponseInline(admin.TabularInline):
     model = QuestionnaireResponse
     extra = 0
-    readonly_fields = ("generated_at",)
+
+
+class ProfileResultInline(admin.TabularInline):
+    model = ProfileResult
+    extra = 0
 
 
 @admin.register(Target)
@@ -34,7 +36,12 @@ class TargetAdmin(admin.ModelAdmin):
     list_display = ("seed_username", "status", "created_at")
     list_filter = ("status",)
     search_fields = ("seed_username",)
-    inlines = [DiscoveredAccountInline, RawScrapeInline, QuestionnaireResponseInline]
+    inlines = [
+        DiscoveredAccountInline,
+        RawScrapeInline,
+        QuestionnaireResponseInline,
+        ProfileResultInline,
+    ]
 
 
 @admin.register(DiscoveredAccount)

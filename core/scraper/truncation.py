@@ -7,28 +7,17 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-def _get_config(key: str, default: str) -> str:
-    """Read from Settings model first, fallback to env var."""
-    try:
-        from core.models import Settings
-        setting = Settings.objects.filter(key=key).first()
-        if setting and setting.value:
-            return setting.value
-    except Exception:
-        pass
-    return os.environ.get(key, default)
-
-
 def prepare_llm_payload(target_id: int) -> str:
     """
     Aggregate, filter, and truncate all RawScrape text for a target.
     Returns a single string ready for the LLM prompt.
     """
     from core.models import RawScrape
+    from core.utils.config import get_config
 
-    max_posts = int(_get_config("MAX_SCRAPE_POSTS", "100"))
-    timeframe_months = int(_get_config("SCRAPE_TIMEFRAME_MONTHS", "12"))
-    max_tokens = int(_get_config("MAX_LLM_TOKENS", "8000"))
+    max_posts = int(get_config("MAX_SCRAPE_POSTS", "100"))
+    timeframe_months = int(get_config("SCRAPE_TIMEFRAME_MONTHS", "12"))
+    max_tokens = int(get_config("MAX_LLM_TOKENS", "8000"))
 
     cutoff = timezone.now() - timedelta(days=timeframe_months * 30)
 
