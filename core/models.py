@@ -110,3 +110,23 @@ class BurnerAccount(models.Model):
 
     def __str__(self):
         return f"{self.platform_name}: {self.username}"
+
+
+class ProfileResult(models.Model):
+    """Aggregated personality framework scores."""
+
+    target = models.ForeignKey(
+        Target,
+        on_delete=models.CASCADE,
+        related_name="profile_results",
+    )
+    framework_name = models.CharField(max_length=100)
+    score_data = models.JSONField(default=dict)
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("target", "framework_name")
+        ordering = ["-generated_at"]
+
+    def __str__(self):
+        return f"{self.framework_name} for {self.target.seed_username}"
