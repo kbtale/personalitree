@@ -1,8 +1,10 @@
-import logging
-import os
 from datetime import timedelta
+import logging
 
 from django.utils import timezone
+
+from core.models import RawScrape
+from core.utils.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -12,22 +14,17 @@ def prepare_llm_payload(target_id: int) -> str:
     Aggregate, filter, and truncate all RawScrape text for a target.
     Returns a single string ready for the LLM prompt.
     """
-    from core.models import RawScrape
-    from core.utils.config import get_config
-
     max_posts = int(get_config("MAX_SCRAPE_POSTS", "100"))
     timeframe_months = int(get_config("SCRAPE_TIMEFRAME_MONTHS", "12"))
     max_tokens = int(get_config("MAX_LLM_TOKENS", "8000"))
 
     cutoff = timezone.now() - timedelta(days=timeframe_months * 30)
 
-    scrapes = (
-        RawScrape.objects
-        .filter(target_id=target_id, scraped_at__gte=cutoff)
-        .order_by("-scraped_at")[:max_posts]
-    )
+    scrapes = RawScrape.objects.filter(
+        target_id=target_id, scraped_at__gte=cutoff
+    ).order_by("-scraped_at")[:max_posts]
 
-    chunks = []
+    chunks: list[str] = []
     for scrape in scrapes:
         if scrape.raw_text_dump.strip():
             header = f"[{scrape.platform_name}]"

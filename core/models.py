@@ -20,9 +20,9 @@ class Target(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ("-created_at",)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.seed_username} ({self.status})"
 
 
@@ -41,9 +41,9 @@ class DiscoveredAccount(models.Model):
 
     class Meta:
         unique_together = ("target", "platform_name", "username")
-        ordering = ["platform_name"]
+        ordering = ("platform_name",)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.platform_name}: {self.username}"
 
 
@@ -61,9 +61,9 @@ class RawScrape(models.Model):
     scraped_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["-scraped_at"]
+        ordering = ("-scraped_at",)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.platform_name} scrape for {self.target.seed_username}"
 
 
@@ -81,9 +81,9 @@ class QuestionnaireResponse(models.Model):
 
     class Meta:
         unique_together = ("target", "question_id")
-        ordering = ["question_id"]
+        ordering = ("question_id",)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Q{self.question_id}: {self.score}"
 
 
@@ -96,7 +96,7 @@ class Settings(models.Model):
     class Meta:
         verbose_name_plural = "Settings"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.key
 
 
@@ -108,7 +108,7 @@ class BurnerAccount(models.Model):
     password = models.CharField(max_length=255)
     is_active = models.BooleanField(default=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.platform_name}: {self.username}"
 
 
@@ -126,7 +126,7 @@ class ProfileResult(models.Model):
 
     class Meta:
         unique_together = ("target", "framework_name")
-        ordering = ["-generated_at"]
+        ordering = ("-generated_at",)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.framework_name} for {self.target.seed_username}"

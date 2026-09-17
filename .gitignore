@@ -14,6 +14,11 @@ coverage.xml
 .coverage
 .cache
 .pytest_cache/
+.ruff_cache/
+
+# --- Django ---
+staticfiles/
+media/
 
 # --- Environments & Secrets ---
 .env
@@ -53,4 +58,4 @@ desktop.ini
 skills-lock.json
 .gemini/
 .anthropic/
-
+AGENTS.md

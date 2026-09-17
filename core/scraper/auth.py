@@ -1,7 +1,10 @@
+import asyncio
 import logging
+from typing import TypedDict
 
-from playwright.async_api import Page
+from playwright.async_api import Error as PlaywrightError, Page
 
+from core.models import BurnerAccount
 from core.scraper.browser import StealthBrowser
 
 logger = logging.getLogger(__name__)
@@ -16,7 +19,17 @@ LOGIN_INDICATORS = [
     "[aria-label*='sign in' i]",
 ]
 
-PLATFORM_LOGIN_SELECTORS: dict[str, dict] = {
+
+class LoginSelectors(TypedDict):
+    """Selectors and entry URL used to drive a platform login form."""
+
+    url: str
+    username_selector: str
+    password_selector: str
+    submit_selector: str
+
+
+PLATFORM_LOGIN_SELECTORS: dict[str, LoginSelectors] = {
     "twitter": {
         "url": "https://x.com/i/flow/login",
         "username_selector": "input[autocomplete='username']",
@@ -57,7 +70,7 @@ async def detect_login_wall(page: Page) -> bool:
             element = await page.query_selector(selector)
             if element:
                 return True
-        except Exception:
+        except PlaywrightError:
             continue
     return False
 
@@ -70,8 +83,6 @@ async def attempt_login(
     Attempt to log in to a platform using a BurnerAccount credential.
     Returns an authenticated Page on success, None on failure.
     """
-    from core.models import BurnerAccount
-
     selectors = PLATFORM_LOGIN_SELECTORS.get(platform_name)
     if not selectors:
         logger.warning("No login selectors defined for '%s'", platform_name)
@@ -104,18 +115,16 @@ async def attempt_login(
         logger.info("Login successful for '%s'", platform_name)
         return page
 
-    except Exception as exc:
-        logger.error("Login attempt raised for '%s': %s", platform_name, exc)
+    except PlaywrightError as exc:
+        logger.exception("Login attempt raised for '%s': %s", platform_name, exc)
         await page.close()
         return None
 
 
-async def _get_burner_account(platform_name: str):
+async def _get_burner_account(platform_name: str) -> BurnerAccount | None:
     """Fetch an active BurnerAccount for a platform (sync ORM via thread)."""
-    import asyncio
 
-    def _query():
-        from core.models import BurnerAccount
+    def _query() -> BurnerAccount | None:
         return BurnerAccount.objects.filter(
             platform_name=platform_name,
             is_active=True,
