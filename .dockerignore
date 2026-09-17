@@ -15,3 +15,8 @@ __pycache__
 .idea
 node_modules
 postgres_data
+.ruff_cache
+.pytest_cache
+htmlcov
+tests
+*.sqlite3

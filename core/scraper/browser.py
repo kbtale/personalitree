@@ -1,21 +1,42 @@
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 import logging
 import random
-from contextlib import asynccontextmanager
+from types import TracebackType
+from typing import Any
 
-from playwright.async_api import Browser, Page, async_playwright
+from django.core.exceptions import (
+    AppRegistryNotReady,
+    ImproperlyConfigured,
+    SynchronousOnlyOperation,
+)
+from django.db.utils import OperationalError, ProgrammingError
+from playwright.async_api import (
+    Browser,
+    Page,
+    Playwright,
+    async_playwright,
+)
 from playwright_stealth import stealth_async
+
+from core.constants import ConfigKey
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_VIEWPORT = {"width": 1920, "height": 1080}
 
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
 ]
 
@@ -23,15 +44,15 @@ USER_AGENTS = [
 class StealthBrowser:
     """Async context manager for a stealth-patched Playwright Chromium browser."""
 
-    def __init__(self, proxy_url: str | None = None):
+    def __init__(self, proxy_url: str | None = None) -> None:
         self._proxy_url = proxy_url
-        self._playwright = None
+        self._playwright: Playwright | None = None
         self._browser: Browser | None = None
 
     async def __aenter__(self) -> "StealthBrowser":
         self._playwright = await async_playwright().start()
 
-        launch_args: dict = {
+        launch_args: dict[str, Any] = {
             "headless": True,
             "args": [
                 "--disable-blink-features=AutomationControlled",
@@ -46,7 +67,12 @@ class StealthBrowser:
         logger.info("StealthBrowser launched (proxy=%s)", self._proxy_url or "none")
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         if self._browser:
             await self._browser.close()
         if self._playwright:
@@ -82,17 +108,23 @@ def _get_proxy_url() -> str | None:
     try:
         from core.models import Settings
 
-        setting = Settings.objects.filter(key="PROXY_URL").first()
-        if setting and setting.value:
-            return setting.value
-    except Exception:
-        pass
+        setting = Settings.objects.filter(key=ConfigKey.PROXY_URL).first()
+    except (
+        AppRegistryNotReady,
+        ImproperlyConfigured,
+        OperationalError,
+        ProgrammingError,
+        SynchronousOnlyOperation,
+    ):
+        return None
+    if setting and setting.value:
+        return setting.value
     return None
 
 
 @asynccontextmanager
-async def create_browser():
+async def create_browser() -> AsyncIterator[StealthBrowser]:
     """Convenience factory that reads proxy config from the database."""
-    proxy = _get_proxy_url()
+    proxy = await asyncio.to_thread(_get_proxy_url)
     async with StealthBrowser(proxy_url=proxy) as browser:
         yield browser

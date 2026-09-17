@@ -1,33 +1,31 @@
 """
 Shell for calculating personality framework scores from raw AI answers.
 """
+
 import logging
-from core.models import QuestionnaireResponse, ProfileResult
+
+from django.db.models import Avg
+
+from core.constants import BIG_FIVE_TRAITS, FRAMEWORK_BIG_FIVE
+from core.models import ProfileResult, QuestionnaireResponse, Target
 
 logger = logging.getLogger(__name__)
 
-def calculate_framework_scores(target):
+
+def calculate_framework_scores(target: Target) -> None:
     _calculate_big_five(target)
 
-def _calculate_big_five(target):
-    responses = QuestionnaireResponse.objects.filter(target=target)
-    if not responses.exists():
-        return
 
-    scores = [r.score for r in responses]
-    avg = sum(scores) / len(scores)
+def _calculate_big_five(target: Target) -> None:
+    average = QuestionnaireResponse.objects.filter(target=target).aggregate(
+        average_score=Avg("score")
+    )["average_score"]
+    if average is None:
+        return
 
     ProfileResult.objects.update_or_create(
         target=target,
-        framework_name="Big Five",
-        defaults={
-            "score_data": {
-                "Openness": avg,
-                "Conscientiousness": avg,
-                "Extraversion": avg,
-                "Agreeableness": avg,
-                "Neuroticism": avg,
-            }
-        }
+        framework_name=FRAMEWORK_BIG_FIVE,
+        defaults={"score_data": dict.fromkeys(BIG_FIVE_TRAITS, average)},
     )
     logger.info("Calculated dummy Big Five results for %s", target.seed_username)

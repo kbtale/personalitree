@@ -1,38 +1,53 @@
 import asyncio
 import logging
 import re
+from typing import TypedDict
 
 from lxml import html as lxml_html
+from lxml.etree import ParserError
+from playwright.async_api import Error as PlaywrightError, Page
 
+from core.constants import HTTP_OK
+from core.models import DiscoveredAccount, Target
 from core.scraper.browser import StealthBrowser
-from core.scraper.platforms import PLATFORMS
+from core.scraper.platforms import PLATFORMS, PlatformSpec
 
 logger = logging.getLogger(__name__)
 
 CONCURRENCY_LIMIT = 5
 
-URL_PATTERN = re.compile(
-    r"https?://[^\s\"'<>)\]},]+", re.IGNORECASE
-)
+URL_PATTERN = re.compile(r"https?://[^\s\"'<>)\]},]+", re.IGNORECASE)
 
-HANDLE_PATTERN = re.compile(
-    r"(?<!\w)@([A-Za-z0-9_.]{2,30})(?!\w)"
-)
+HANDLE_PATTERN = re.compile(r"(?<!\w)@([A-Za-z0-9_.]{2,30})(?!\w)")
+
+
+class PlatformCandidate(TypedDict):
+    """A username confirmed to exist on a platform, with its live page."""
+
+    platform: str
+    url: str
+    username: str
+    confidence: float
+    bio_selector: str | None
+    page: Page
 
 
 async def _check_platform(
     browser: StealthBrowser,
-    platform: dict,
+    platform: PlatformSpec,
     username: str,
     semaphore: asyncio.Semaphore,
-) -> dict | None:
+) -> PlatformCandidate | None:
     """Check if a username exists on a single platform."""
     url = platform["url"].format(username=username)
     async with semaphore:
         page = await browser.new_page()
+        response = None
         try:
-            response = await page.goto(url, wait_until="domcontentloaded", timeout=15000)
-            if response and response.status == 200:
+            response = await page.goto(
+                url, wait_until="domcontentloaded", timeout=15000
+            )
+            if response and response.status == HTTP_OK:
                 return {
                     "platform": platform["name"],
                     "url": url,
@@ -42,18 +57,18 @@ async def _check_platform(
                     "page": page,
                 }
             return None
-        except Exception as exc:
+        except PlaywrightError as exc:
             logger.debug("Failed to check %s: %s", url, exc)
             return None
         finally:
-            if not (response and response.status == 200):
+            if not (response and response.status == HTTP_OK):
                 await page.close()
 
 
 async def resolve_username(
     browser: StealthBrowser,
     username: str,
-) -> list[dict]:
+) -> list[PlatformCandidate]:
     """Resolve a username across all configured platforms."""
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
@@ -64,12 +79,12 @@ async def resolve_username(
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    confirmed = []
+    confirmed: list[PlatformCandidate] = []
     for result in results:
-        if isinstance(result, dict):
-            confirmed.append(result)
-        elif isinstance(result, Exception):
+        if isinstance(result, Exception):
             logger.warning("Platform check raised: %s", result)
+        elif result is not None:
+            confirmed.append(result)
 
     logger.info(
         "Resolved '%s': %d/%d platforms confirmed",
@@ -80,7 +95,9 @@ async def resolve_username(
     return confirmed
 
 
-async def extract_bio_links(page, platform_result: dict) -> list[str]:
+async def extract_bio_links(
+    page: Page, platform_result: PlatformCandidate
+) -> list[str]:
     """Extract URLs and handles from a confirmed profile's bio."""
     discovered = []
     bio_text = ""
@@ -115,7 +132,7 @@ async def extract_bio_links(page, platform_result: dict) -> list[str]:
         discovered.extend(urls)
         discovered.extend(handles)
 
-    except Exception as exc:
+    except (PlaywrightError, ParserError) as exc:
         logger.warning(
             "Bio extraction failed for %s: %s",
             platform_result["platform"],
@@ -133,9 +150,7 @@ async def build_discovery_tree(target_id: int, max_depth: int = 2) -> None:
     Resolves usernames across platforms, extracts bio links,
     and resolves inferred handles.
     """
-    from core.models import DiscoveredAccount, Target
-
-    target = await asyncio.to_thread(Target.objects.get, id=target_id)
+    target = await asyncio.to_thread(Target.objects.fetch, target_id)
     seed = target.seed_username
     seen_usernames: set[str] = {seed.lower()}
     queue: list[tuple[str, int]] = [(seed, 0)]
@@ -147,9 +162,7 @@ async def build_discovery_tree(target_id: int, max_depth: int = 2) -> None:
             if depth > max_depth:
                 continue
 
-            logger.info(
-                "Resolving '%s' (depth %d/%d)", username, depth, max_depth
-            )
+            logger.info("Resolving '%s' (depth %d/%d)", username, depth, max_depth)
 
             confirmed = await resolve_username(browser, username)
 
@@ -177,10 +190,8 @@ async def build_discovery_tree(target_id: int, max_depth: int = 2) -> None:
     )
 
 
-def _save_discovered_account(target, result: dict) -> None:
+def _save_discovered_account(target: Target, result: PlatformCandidate) -> None:
     """Save or update a DiscoveredAccount row (sync, called via to_thread)."""
-    from core.models import DiscoveredAccount
-
     DiscoveredAccount.objects.update_or_create(
         target=target,
         platform_name=result["platform"],

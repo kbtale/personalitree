@@ -113,7 +113,7 @@ ASGI_APPLICATION = "personalitree.asgi.application"
 
 
 # ============================================================
-# 5. Database — SQLite (default) or PostgreSQL
+# 5. Database - SQLite (default) or PostgreSQL
 # ============================================================
 # Set DB_ENGINE=postgresql in .env to use PostgreSQL via Docker.
 
@@ -151,15 +151,15 @@ else:
 Q_CLUSTER = {
     "name": "personalitree",
     "workers": int(env("Q_WORKERS", "2")),
-    "recycle": 500,               # restart worker after N tasks (leak guard)
-    "timeout": 600,               # max seconds a single task may run
-    "retry": 660,                 # retry window (must be > timeout)
-    "compress": True,             # gzip large payloads
-    "save_limit": 250,            # keep last N successful results in DB
-    "queue_limit": 50,            # max tasks waiting in queue
+    "recycle": 500,  # restart worker after N tasks (leak guard)
+    "timeout": 600,  # max seconds a single task may run
+    "retry": 660,  # retry window (must be > timeout)
+    "compress": True,  # gzip large payloads
+    "save_limit": 250,  # keep last N successful results in DB
+    "queue_limit": 50,  # max tasks waiting in queue
     "label": "PersonaliTree Q",
-    "orm": "default",             # use the 'default' database as broker
-    "catch_up": False,            # don't replay missed scheduled tasks on boot
+    "orm": "default",  # use the 'default' database as broker
+    "catch_up": False,  # don't replay missed scheduled tasks on boot
 }
 
 
@@ -167,11 +167,13 @@ Q_CLUSTER = {
 # 7. Password Validation
 # ============================================================
 
+_PASSWORD_VALIDATOR_PREFIX = "django.contrib.auth.password_validation"
+
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": f"{_PASSWORD_VALIDATOR_PREFIX}.UserAttributeSimilarityValidator"},
+    {"NAME": f"{_PASSWORD_VALIDATOR_PREFIX}.MinimumLengthValidator"},
+    {"NAME": f"{_PASSWORD_VALIDATOR_PREFIX}.CommonPasswordValidator"},
+    {"NAME": f"{_PASSWORD_VALIDATOR_PREFIX}.NumericPasswordValidator"},
 ]
 
 
@@ -202,7 +204,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Logging — structured, container-friendly (stdout)
+# Logging - structured, container-friendly (stdout)
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

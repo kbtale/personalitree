@@ -36,12 +36,12 @@ class TargetAdmin(admin.ModelAdmin):
     list_display = ("seed_username", "status", "created_at")
     list_filter = ("status",)
     search_fields = ("seed_username",)
-    inlines = [
+    inlines = (
         DiscoveredAccountInline,
         RawScrapeInline,
         QuestionnaireResponseInline,
         ProfileResultInline,
-    ]
+    )
 
 
 @admin.register(DiscoveredAccount)
