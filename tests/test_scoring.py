@@ -1,17 +1,10 @@
 import pytest
 
+from core.constants import BIG_FIVE_TRAITS, FRAMEWORK_BIG_FIVE
 from core.models import ProfileResult, QuestionnaireResponse, Target
 from core.scoring.engine import calculate_framework_scores
 
 pytestmark = pytest.mark.django_db
-
-TRAITS = (
-    "Openness",
-    "Conscientiousness",
-    "Extraversion",
-    "Agreeableness",
-    "Neuroticism",
-)
 
 
 def _add_responses(target: Target, scores: list[int], start: int = 0) -> None:
@@ -35,8 +28,8 @@ def test_average_is_written_for_every_trait(target):
     calculate_framework_scores(target)
 
     result = ProfileResult.objects.get(target=target)
-    assert result.framework_name == "Big Five"
-    assert result.score_data == dict.fromkeys(TRAITS, 3.0)
+    assert result.framework_name == FRAMEWORK_BIG_FIVE
+    assert result.score_data == dict.fromkeys(BIG_FIVE_TRAITS, 3.0)
 
 
 def test_second_run_updates_the_existing_row(target):

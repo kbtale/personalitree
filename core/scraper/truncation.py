@@ -3,6 +3,7 @@ import logging
 
 from django.utils import timezone
 
+from core.constants import CHARS_PER_TOKEN_ESTIMATE, ConfigKey
 from core.models import RawScrape
 from core.utils.config import get_config
 
@@ -14,9 +15,9 @@ def prepare_llm_payload(target_id: int) -> str:
     Aggregate, filter, and truncate all RawScrape text for a target.
     Returns a single string ready for the LLM prompt.
     """
-    max_posts = int(get_config("MAX_SCRAPE_POSTS", "100"))
-    timeframe_months = int(get_config("SCRAPE_TIMEFRAME_MONTHS", "12"))
-    max_tokens = int(get_config("MAX_LLM_TOKENS", "8000"))
+    max_posts = int(get_config(ConfigKey.MAX_SCRAPE_POSTS, "100"))
+    timeframe_months = int(get_config(ConfigKey.SCRAPE_TIMEFRAME_MONTHS, "12"))
+    max_tokens = int(get_config(ConfigKey.MAX_LLM_TOKENS, "8000"))
 
     cutoff = timezone.now() - timedelta(days=timeframe_months * 30)
 
@@ -32,9 +33,9 @@ def prepare_llm_payload(target_id: int) -> str:
 
     payload = "\n\n---\n\n".join(chunks)
 
-    estimated_tokens = len(payload) // 4
+    estimated_tokens = len(payload) // CHARS_PER_TOKEN_ESTIMATE
     if estimated_tokens > max_tokens:
-        char_limit = max_tokens * 4
+        char_limit = max_tokens * CHARS_PER_TOKEN_ESTIMATE
         payload = payload[:char_limit]
         logger.info(
             "Payload truncated from ~%d to ~%d tokens for target_id=%d",
@@ -47,7 +48,7 @@ def prepare_llm_payload(target_id: int) -> str:
         "Payload prepared for target_id=%d: %d scrapes, ~%d tokens",
         target_id,
         len(chunks),
-        len(payload) // 4,
+        len(payload) // CHARS_PER_TOKEN_ESTIMATE,
     )
 
     return payload

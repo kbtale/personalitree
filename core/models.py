@@ -1,8 +1,23 @@
 from django.db import models
 
+from core.exceptions import TargetNotFoundError
+
+
+class TargetQuerySet(models.QuerySet):
+    """Query helpers for Target."""
+
+    def fetch(self, target_id: int) -> "Target":
+        """Return the Target with the given id or raise TargetNotFoundError."""
+        target = self.filter(id=target_id).first()
+        if target is None:
+            raise TargetNotFoundError(f"Target {target_id} does not exist")
+        return target
+
 
 class Target(models.Model):
     """Central entity representing a username under investigation."""
+
+    objects = TargetQuerySet.as_manager()
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -61,6 +76,7 @@ class RawScrape(models.Model):
     scraped_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        unique_together = ("target", "platform_name")
         ordering = ("-scraped_at",)
 
     def __str__(self) -> str:

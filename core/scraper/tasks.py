@@ -31,10 +31,8 @@ async def _run_pipeline(target_id: int) -> None:
 
     await build_discovery_tree(target_id)
 
-    accounts = await asyncio.to_thread(
-        list,
-        Target.objects.get(id=target_id).discovered_accounts.all(),
-    )
+    target = await asyncio.to_thread(Target.objects.fetch, target_id)
+    accounts = await asyncio.to_thread(list, target.discovered_accounts.all())
 
     async with create_browser() as browser:
         for account in accounts:
@@ -91,7 +89,7 @@ def _save_raw_scrape(
     raw_text: str,
     metadata: dict[str, Any],
 ) -> None:
-    target = Target.objects.get(id=target_id)
+    target = Target.objects.fetch(target_id)
     RawScrape.objects.update_or_create(
         target=target,
         platform_name=platform_name,

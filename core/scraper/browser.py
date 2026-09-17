@@ -20,6 +20,8 @@ from playwright.async_api import (
 )
 from playwright_stealth import stealth_async
 
+from core.constants import ConfigKey
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_VIEWPORT = {"width": 1920, "height": 1080}
@@ -106,7 +108,7 @@ def _get_proxy_url() -> str | None:
     try:
         from core.models import Settings
 
-        setting = Settings.objects.filter(key="PROXY_URL").first()
+        setting = Settings.objects.filter(key=ConfigKey.PROXY_URL).first()
     except (
         AppRegistryNotReady,
         ImproperlyConfigured,
@@ -123,6 +125,6 @@ def _get_proxy_url() -> str | None:
 @asynccontextmanager
 async def create_browser() -> AsyncIterator[StealthBrowser]:
     """Convenience factory that reads proxy config from the database."""
-    proxy = _get_proxy_url()
+    proxy = await asyncio.to_thread(_get_proxy_url)
     async with StealthBrowser(proxy_url=proxy) as browser:
         yield browser

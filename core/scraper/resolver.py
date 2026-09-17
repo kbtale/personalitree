@@ -7,6 +7,7 @@ from lxml import html as lxml_html
 from lxml.etree import ParserError
 from playwright.async_api import Error as PlaywrightError, Page
 
+from core.constants import HTTP_OK
 from core.models import DiscoveredAccount, Target
 from core.scraper.browser import StealthBrowser
 from core.scraper.platforms import PLATFORMS, PlatformSpec
@@ -14,8 +15,6 @@ from core.scraper.platforms import PLATFORMS, PlatformSpec
 logger = logging.getLogger(__name__)
 
 CONCURRENCY_LIMIT = 5
-
-HTTP_OK = 200
 
 URL_PATTERN = re.compile(r"https?://[^\s\"'<>)\]},]+", re.IGNORECASE)
 
@@ -43,6 +42,7 @@ async def _check_platform(
     url = platform["url"].format(username=username)
     async with semaphore:
         page = await browser.new_page()
+        response = None
         try:
             response = await page.goto(
                 url, wait_until="domcontentloaded", timeout=15000
@@ -150,7 +150,7 @@ async def build_discovery_tree(target_id: int, max_depth: int = 2) -> None:
     Resolves usernames across platforms, extracts bio links,
     and resolves inferred handles.
     """
-    target = await asyncio.to_thread(Target.objects.get, id=target_id)
+    target = await asyncio.to_thread(Target.objects.fetch, target_id)
     seed = target.seed_username
     seen_usernames: set[str] = {seed.lower()}
     queue: list[tuple[str, int]] = [(seed, 0)]

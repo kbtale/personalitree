@@ -4,10 +4,12 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 import pytest
 
+from core.constants import FRAMEWORK_BIG_FIVE
 from core.models import (
     DiscoveredAccount,
     ProfileResult,
     QuestionnaireResponse,
+    RawScrape,
     Target,
 )
 
@@ -61,8 +63,17 @@ def test_questionnaire_response_is_unique_per_target_and_question():
 
 def test_profile_result_is_unique_per_target_and_framework():
     target = Target.objects.create(seed_username="seed_user")
-    fields = {"target": target, "framework_name": "Big Five", "score_data": {}}
+    fields = {"target": target, "framework_name": FRAMEWORK_BIG_FIVE, "score_data": {}}
     ProfileResult.objects.create(**fields)
 
     with pytest.raises(IntegrityError), transaction.atomic():
         ProfileResult.objects.create(**fields)
+
+
+def test_raw_scrape_is_unique_per_target_and_platform():
+    target = Target.objects.create(seed_username="seed_user")
+    fields = {"target": target, "platform_name": "github", "raw_text_dump": "text"}
+    RawScrape.objects.create(**fields)
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        RawScrape.objects.create(**fields)

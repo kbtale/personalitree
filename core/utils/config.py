@@ -11,8 +11,10 @@ from django.core.exceptions import (
 )
 from django.db.utils import OperationalError, ProgrammingError
 
+from core.constants import ConfigKey
 
-def get_config(key: str, default: str) -> str:
+
+def get_config(key: ConfigKey, default: str) -> str:
     try:
         from core.models import Settings
 
