@@ -1,17 +1,25 @@
 import pytest
 
-from core.constants import BIG_FIVE_TRAITS, FRAMEWORK_BIG_FIVE
-from core.models import ProfileResult, QuestionnaireResponse, Target
+from core.constants import BIG_FIVE_TRAITS, Framework
+from core.models import ProfileResult, Question, QuestionnaireResponse, Target
 from core.scoring.engine import calculate_framework_scores
 
 pytestmark = pytest.mark.django_db
 
+TRAIT = BIG_FIVE_TRAITS[0]
+
 
 def _add_responses(target: Target, scores: list[int], start: int = 0) -> None:
     for offset, score in enumerate(scores):
+        question = Question.objects.create(
+            question_id=f"Q{start + offset}",
+            framework_name=Framework.BIG_FIVE,
+            trait=TRAIT,
+            text="I enjoy trying new things.",
+        )
         QuestionnaireResponse.objects.create(
             target=target,
-            question_id=f"Q{start + offset}",
+            question=question,
             score=score,
         )
 
@@ -28,7 +36,7 @@ def test_average_is_written_for_every_trait(target):
     calculate_framework_scores(target)
 
     result = ProfileResult.objects.get(target=target)
-    assert result.framework_name == FRAMEWORK_BIG_FIVE
+    assert result.framework_name == Framework.BIG_FIVE
     assert result.score_data == dict.fromkeys(BIG_FIVE_TRAITS, 3.0)
 
 

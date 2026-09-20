@@ -7,10 +7,11 @@ import json
 import logging
 from typing import TypedDict
 
+from core.constants import Framework
 from core.exceptions import LLMError, LLMResponseError
 from core.llm.prompts import TRAIT_EVALUATION_PROMPT
 from core.llm.router import generate_llm_response
-from core.models import QuestionnaireResponse, Target
+from core.models import Question, QuestionnaireResponse, Target
 from core.scoring.engine import calculate_framework_scores
 from core.scraper.truncation import prepare_llm_payload
 
@@ -68,9 +69,15 @@ async def run_evaluation_pipeline(target_id: int) -> None:
 
 def _store_scores(target: Target, items: list[ScoreItem]) -> None:
     for item in items:
+        question = Question.objects.filter(
+            framework_name=Framework.BIG_FIVE,
+            question_id=item["id"],
+        ).first()
+        if question is None:
+            raise LLMResponseError(f"unknown question id {item['id']}")
         QuestionnaireResponse.objects.update_or_create(
             target=target,
-            question_id=item["id"],
+            question=question,
             defaults={"score": item["score"]},
         )
 

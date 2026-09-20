@@ -3,9 +3,25 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from core.constants import BIG_FIVE_TRAITS, Framework
 from core.exceptions import LLMProviderError, LLMResponseError, TargetNotFoundError
 from core.llm import pipeline
-from core.models import ProfileResult, QuestionnaireResponse, RawScrape, Target
+from core.models import (
+    ProfileResult,
+    Question,
+    QuestionnaireResponse,
+    RawScrape,
+    Target,
+)
+
+
+def _add_question(question_id: str) -> Question:
+    return Question.objects.create(
+        question_id=question_id,
+        framework_name=Framework.BIG_FIVE,
+        trait=BIG_FIVE_TRAITS[0],
+        text="I enjoy trying new things.",
+    )
 
 
 @pytest.mark.django_db
@@ -38,6 +54,8 @@ def test_scores_are_stored_and_the_target_completes(monkeypatch):
         platform_name="github",
         raw_text_dump="profile text",
     )
+    _add_question("Q1")
+    _add_question("Q2")
     monkeypatch.setattr(
         pipeline,
         "generate_llm_response",
@@ -50,7 +68,7 @@ def test_scores_are_stored_and_the_target_completes(monkeypatch):
     assert target.status == Target.Status.COMPLETED
     scores = dict(
         QuestionnaireResponse.objects.filter(target=target).values_list(
-            "question_id", "score"
+            "question__question_id", "score"
         )
     )
     assert scores == {"Q1": 4, "Q2": 2}

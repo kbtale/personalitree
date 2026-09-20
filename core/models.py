@@ -1,5 +1,7 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
+from core.constants import FRAMEWORK_TRAITS, SCORE_MAX, SCORE_MIN, Framework
 from core.exceptions import TargetNotFoundError
 
 
@@ -87,6 +89,36 @@ class RawScrape(models.Model):
         return f"{self.platform_name} scrape for {self.target.seed_username}"
 
 
+class Question(models.Model):
+    """A single questionnaire item evaluated by the LLM."""
+
+    question_id = models.CharField(max_length=50)
+    framework_name = models.CharField(max_length=100, choices=Framework.choices)
+    trait = models.CharField(max_length=50)
+    text = models.TextField()
+    reverse_scored = models.BooleanField(default=False)
+    min_score = models.PositiveSmallIntegerField(default=SCORE_MIN)
+    max_score = models.PositiveSmallIntegerField(default=SCORE_MAX)
+
+    class Meta:
+        unique_together = ("framework_name", "question_id")
+        ordering = ("question_id",)
+
+    def clean(self) -> None:
+        """Reject a trait outside the framework or an inverted score scale."""
+        super().clean()
+        traits = FRAMEWORK_TRAITS.get(self.framework_name, ())
+        if self.trait not in traits:
+            raise ValidationError(
+                {"trait": f"'{self.trait}' is not part of {self.framework_name}"}
+            )
+        if self.min_score >= self.max_score:
+            raise ValidationError({"min_score": "must be lower than max_score"})
+
+    def __str__(self) -> str:
+        return f"{self.question_id}: {self.text[:60]}"
+
+
 class QuestionnaireResponse(models.Model):
     """Individual LLM answer for a single questionnaire question."""
 
@@ -95,16 +127,20 @@ class QuestionnaireResponse(models.Model):
         on_delete=models.CASCADE,
         related_name="questionnaire_responses",
     )
-    question_id = models.CharField(max_length=50)
+    question = models.ForeignKey(
+        Question,
+        on_delete=models.PROTECT,
+        related_name="responses",
+    )
     score = models.IntegerField()
     generated_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("target", "question_id")
-        ordering = ("question_id",)
+        unique_together = ("target", "question")
+        ordering = ("question__question_id",)
 
     def __str__(self) -> str:
-        return f"Q{self.question_id}: {self.score}"
+        return f"Q{self.question.question_id}: {self.score}"
 
 
 class Settings(models.Model):
@@ -140,7 +176,7 @@ class ProfileResult(models.Model):
         on_delete=models.CASCADE,
         related_name="profile_results",
     )
-    framework_name = models.CharField(max_length=100)
+    framework_name = models.CharField(max_length=100, choices=Framework.choices)
     score_data = models.JSONField(default=dict)
     generated_at = models.DateTimeField(auto_now_add=True)
 

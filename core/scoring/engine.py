@@ -6,7 +6,7 @@ import logging
 
 from django.db.models import Avg
 
-from core.constants import BIG_FIVE_TRAITS, FRAMEWORK_BIG_FIVE
+from core.constants import BIG_FIVE_TRAITS, Framework
 from core.models import ProfileResult, QuestionnaireResponse, Target
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ def _calculate_big_five(target: Target) -> None:
 
     ProfileResult.objects.update_or_create(
         target=target,
-        framework_name=FRAMEWORK_BIG_FIVE,
+        framework_name=Framework.BIG_FIVE,
         defaults={"score_data": dict.fromkeys(BIG_FIVE_TRAITS, average)},
     )
     logger.info("Calculated dummy Big Five results for %s", target.seed_username)

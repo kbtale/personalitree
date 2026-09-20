@@ -1,19 +1,34 @@
 from datetime import timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 import pytest
 
-from core.constants import FRAMEWORK_BIG_FIVE
+from core.constants import BIG_FIVE_TRAITS, Framework
 from core.models import (
     DiscoveredAccount,
     ProfileResult,
+    Question,
     QuestionnaireResponse,
     RawScrape,
     Target,
 )
 
 pytestmark = pytest.mark.django_db
+
+TRAIT = BIG_FIVE_TRAITS[0]
+
+
+def _new_question(**overrides) -> Question:
+    fields = {
+        "question_id": "Q1",
+        "framework_name": Framework.BIG_FIVE,
+        "trait": TRAIT,
+        "text": "I enjoy trying new things.",
+    }
+    fields.update(overrides)
+    return Question(**fields)
 
 
 def test_target_defaults_to_pending_status():
@@ -59,9 +74,32 @@ def test_discovered_account_is_unique_per_target_platform_and_username():
         DiscoveredAccount.objects.create(**fields)
 
 
+def test_question_rejects_a_trait_outside_the_framework():
+    question = _new_question(trait="Charisma")
+
+    with pytest.raises(ValidationError):
+        question.full_clean()
+
+
+def test_question_rejects_an_inverted_score_scale():
+    question = _new_question(min_score=4, max_score=2)
+
+    with pytest.raises(ValidationError):
+        question.full_clean()
+
+
+def test_question_is_unique_per_framework_and_id():
+    _new_question().save()
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        _new_question().save()
+
+
 def test_questionnaire_response_is_unique_per_target_and_question():
     target = Target.objects.create(seed_username="seed_user")
-    fields = {"target": target, "question_id": "Q1", "score": 3}
+    question = _new_question()
+    question.save()
+    fields = {"target": target, "question": question, "score": 3}
     QuestionnaireResponse.objects.create(**fields)
 
     with pytest.raises(IntegrityError), transaction.atomic():
@@ -70,7 +108,11 @@ def test_questionnaire_response_is_unique_per_target_and_question():
 
 def test_profile_result_is_unique_per_target_and_framework():
     target = Target.objects.create(seed_username="seed_user")
-    fields = {"target": target, "framework_name": FRAMEWORK_BIG_FIVE, "score_data": {}}
+    fields = {
+        "target": target,
+        "framework_name": Framework.BIG_FIVE,
+        "score_data": {},
+    }
     ProfileResult.objects.create(**fields)
 
     with pytest.raises(IntegrityError), transaction.atomic():
