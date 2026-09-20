@@ -48,32 +48,41 @@ Changing the key makes stored passwords undecryptable; the application reports t
 returning garbage. Rows written before encryption existed are read as plaintext with a warning and
 are converted by `python manage.py encrypt_burner_passwords`.
 
-### Question bank
+### Instruments
 
-The evaluation prompt is built from the questions stored in the database, so load a bank before
-running a scrape:
+An instrument is a framework with its traits and items. Load one from a file:
 
 ```bash
-python manage.py load_questionnaire path/to/questions.json
+python manage.py load_questionnaire banks/ipip-big-five-50.json
 ```
 
-The file is a JSON array; `question_id`, `framework_name`, `trait` and `text` are required, while
-`reverse_scored`, `min_score` and `max_score` are optional (defaults: `false`, `1`, `5`):
+The file is a JSON object. `framework` needs `slug` and `name`, plus any of `description`, `citation`,
+`source_url` and `is_active`. `traits` is a non-empty list of `slug`/`name` pairs, and `items` is a
+non-empty list of `id`, `trait`, `text` with optional `reverse_scored`, `min_score` and `max_score`
+(defaults `false`, `1` and `5`):
 
 ```json
-[
-  {
-    "question_id": "Q1",
-    "framework_name": "Big Five",
-    "trait": "Openness",
-    "text": "I enjoy trying new things.",
-    "reverse_scored": false
-  }
-]
+{
+  "framework": { "slug": "my-instrument", "name": "My Instrument" },
+  "traits": [{ "slug": "curiosity", "name": "Curiosity" }],
+  "items": [
+    { "id": "Q1", "trait": "curiosity", "text": "Asks a lot of questions." }
+  ]
+}
 ```
 
-Items are upserted by `framework_name` and `question_id`, so re-running the command after a wording
-change updates the item without touching answers already recorded.
+The whole file is loaded in one transaction: a malformed file writes nothing and reports every problem
+it can see. Items and traits are upserted by slug, and items the file no longer lists are removed
+unless they already have answers, in which case they are kept and counted. Every active instrument is
+evaluated for every target, so `is_active: false` keeps an instrument loaded without running it.
+
+`banks/ipip-big-five-50.json` ships with the repo. It is the 50-item IPIP Big Five Factor Markers key
+(Extraversion, Agreeableness, Conscientiousness, Emotional Stability, Intellect/Imagination) taken from
+the International Personality Item Pool and converted to third-person form exactly as the IPIP site
+instructs, so the items describe a person rather than asking them to describe themselves. Cite
+Goldberg, L. R. (1992). The development of markers for the Big-Five factor structure.
+*Psychological Assessment, 4*, 26-42. The IPIP items are in the public domain: no fee and no
+permission required.
 
 ### Running a scrape
 
