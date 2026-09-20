@@ -59,7 +59,9 @@ class DiscoveredAccount(models.Model):
     platform_name = models.CharField(max_length=100)
     url = models.URLField(max_length=500)
     username = models.CharField(max_length=255)
-    verification_confidence = models.FloatField(default=0.0)
+    display_name = models.CharField(max_length=255, blank=True, default="")
+    confidence = models.FloatField(default=0.0)
+    signals = models.JSONField(default=list, blank=True)
 
     class Meta:
         unique_together = ("target", "platform_name", "username")

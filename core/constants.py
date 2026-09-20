@@ -40,6 +40,24 @@ class LLMProvider(StrEnum):
     GOOGLE = "google"
 
 
+class Signal(StrEnum):
+    """Why a discovered account was accepted; each carries a documented weight."""
+
+    EXISTENCE_PROVEN = "existence_proven"
+    HANDLE_MATCHES_SEED = "handle_matches_seed"
+    DISPLAY_NAME_MATCHES_KNOWN = "display_name_matches_known"
+    BIO_LINKS_TO_CONFIRMED = "bio_links_to_confirmed"
+    PROBED_FROM_CONFIRMED_BIO = "probed_from_confirmed_bio"
+
+
+SIGNAL_WEIGHTS: dict[str, float] = {
+    Signal.HANDLE_MATCHES_SEED: 0.40,
+    Signal.DISPLAY_NAME_MATCHES_KNOWN: 0.30,
+    Signal.BIO_LINKS_TO_CONFIRMED: 0.20,
+    Signal.PROBED_FROM_CONFIRMED_BIO: 0.10,
+}
+
+
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
 DEFAULT_GOOGLE_MODEL = "gemini-1.5-flash"

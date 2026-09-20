@@ -1,18 +1,35 @@
 """
 Platform definitions for identity resolution.
-Each entry maps a platform name to its URL template and an optional
-CSS selector for extracting bio/description text from the profile page.
+
+Each entry maps a platform name to its URL template, an optional CSS selector for
+extracting bio/description text, and - where the platform publishes a
+distinguishable one - the markers its not-found page carries. A platform without
+its own markers falls back to GENERIC_NOT_FOUND_MARKERS together with the status
+and URL checks in the resolver, and the report says so instead of pretending the
+check was platform-specific.
 """
 
-from typing import TypedDict
+from typing import NotRequired, TypedDict
+
+GENERIC_NOT_FOUND_MARKERS = (
+    "page not found",
+    "user not found",
+    "profile not found",
+    "account not found",
+    "doesn't exist",
+    "does not exist",
+    "no longer available",
+    "couldn't find that user",
+)
 
 
 class PlatformSpec(TypedDict):
-    """URL template and optional bio selector for a single supported platform."""
+    """URL template, bio selector and optional not-found markers for a platform."""
 
     name: str
     url: str
     bio_selector: str | None
+    not_found_markers: NotRequired[tuple[str, ...]]
 
 
 PLATFORMS: list[PlatformSpec] = [
