@@ -1,0 +1,36 @@
+{
+  "framework": {
+    "slug": "sample-instrument",
+    "name": "Sample Instrument",
+    "description": "Fixture instrument used by the loader tests.",
+    "citation": "Test fixture, not a real instrument.",
+    "source_url": "https://example.com/sample-instrument",
+    "is_active": true
+  },
+  "traits": [
+    { "slug": "openness", "name": "Openness" },
+    { "slug": "caution", "name": "Caution" }
+  ],
+  "items": [
+    {
+      "id": "Q1",
+      "trait": "openness",
+      "text": "Tries new things.",
+      "reverse_scored": false
+    },
+    {
+      "id": "Q2",
+      "trait": "openness",
+      "text": "Seeks out variety.",
+      "reverse_scored": false
+    },
+    {
+      "id": "Q3",
+      "trait": "caution",
+      "text": "Avoids taking risks.",
+      "reverse_scored": true,
+      "min_score": 1,
+      "max_score": 5
+    }
+  ]
+}

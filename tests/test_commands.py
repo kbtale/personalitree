@@ -6,13 +6,12 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 import pytest
 
-from core.constants import BIG_FIVE_TRAITS, Framework
-from core.models import Question, Target
+from core.models import Framework, Question, QuestionnaireResponse, Target
 from core.scraper import queue
 
 pytestmark = pytest.mark.django_db
 
-FIXTURE = Path(__file__).parent / "fixtures" / "big_five_sample.json"
+FIXTURE = Path(__file__).parent / "fixtures" / "sample_instrument.json"
 
 
 def test_queue_scrape_dispatches_the_task(monkeypatch):
@@ -63,69 +62,95 @@ def test_reset_target_clears_the_attempt_history():
     assert "reset" in stdout.getvalue()
 
 
-def test_load_questionnaire_creates_the_bank():
+def test_load_questionnaire_creates_the_instrument():
     stdout = StringIO()
 
     call_command("load_questionnaire", FIXTURE, stdout=stdout)
 
-    assert Question.objects.count() == 3
-    assert Question.objects.get(question_id="Q2").reverse_scored is True
-    assert "3 created" in stdout.getvalue()
+    framework = Framework.objects.get(slug="sample-instrument")
+    assert framework.traits.count() == 2
+    assert framework.questions.count() == 3
+    assert framework.questions.get(question_id="Q3").reverse_scored is True
+    assert framework.citation.startswith("Test fixture")
+    assert "3 items created" in stdout.getvalue()
 
 
-def test_load_questionnaire_updates_existing_items():
+def test_load_questionnaire_updates_items_in_place():
     call_command("load_questionnaire", FIXTURE, stdout=StringIO())
     Question.objects.filter(question_id="Q1").update(text="stale wording")
 
     call_command("load_questionnaire", FIXTURE, stdout=StringIO())
 
-    assert Question.objects.count() == 3
-    assert Question.objects.get(question_id="Q1").text == "I enjoy trying new things."
+    assert Question.objects.filter(question_id="Q1").count() == 1
+    assert Question.objects.get(question_id="Q1").text == "Tries new things."
 
 
-def test_load_questionnaire_rejects_an_unknown_trait(tmp_path):
-    path = tmp_path / "bank.json"
-    path.write_text(
-        json.dumps(
-            [
-                {
-                    "question_id": "Q1",
-                    "framework_name": Framework.BIG_FIVE,
-                    "trait": "Charisma",
-                    "text": "I light up a room.",
-                }
-            ]
-        ),
-        encoding="utf-8",
-    )
+def test_load_questionnaire_removes_items_absent_from_the_file(tmp_path):
+    call_command("load_questionnaire", FIXTURE, stdout=StringIO())
+    shortened = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    shortened["items"] = shortened["items"][:2]
+    path = tmp_path / "shortened.json"
+    path.write_text(json.dumps(shortened), encoding="utf-8")
+
+    call_command("load_questionnaire", path, stdout=StringIO())
+
+    assert Question.objects.filter(question_id="Q3").exists() is False
+
+
+def test_load_questionnaire_keeps_items_that_already_have_answers(
+    instrument,
+    target,
+    tmp_path,
+):
+    question = instrument.questions.get(question_id="Q3")
+    QuestionnaireResponse.objects.create(target=target, question=question, score=4)
+    shortened = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    shortened["items"] = shortened["items"][:2]
+
+    call_command("load_questionnaire", _write(tmp_path, shortened))
+
+    assert Question.objects.filter(question_id="Q3").exists()
+
+
+def _write(tmp_path: Path, data: dict) -> Path:
+    path = tmp_path / "instrument.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+def test_load_questionnaire_rejects_undeclared_traits(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    document["items"][0]["trait"] = "not-declared"
+    path = _write(tmp_path, document)
 
     with pytest.raises(CommandError):
         call_command("load_questionnaire", path)
 
-    assert Question.objects.count() == 0
+    assert Framework.objects.count() == 0
 
 
-def test_load_questionnaire_reports_broken_json(tmp_path):
-    path = tmp_path / "bank.json"
+def test_load_questionnaire_rejects_unknown_fields(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    document["items"][0]["weight"] = 2
+    path = _write(tmp_path, document)
+
+    with pytest.raises(CommandError):
+        call_command("load_questionnaire", path)
+
+
+def test_load_questionnaire_rejects_broken_json(tmp_path):
+    path = tmp_path / "instrument.json"
     path.write_text("{not json", encoding="utf-8")
 
     with pytest.raises(CommandError):
         call_command("load_questionnaire", path)
 
 
-def test_load_questionnaire_requires_the_known_fields(tmp_path):
-    path = tmp_path / "bank.json"
-    path.write_text(
-        json.dumps([{"question_id": "Q1", "framework_name": Framework.BIG_FIVE}]),
-        encoding="utf-8",
-    )
+def test_load_questionnaire_rejects_an_inverted_scale(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    document["items"][0]["min_score"] = 5
+    document["items"][0]["max_score"] = 1
+    path = _write(tmp_path, document)
 
     with pytest.raises(CommandError):
         call_command("load_questionnaire", path)
-
-
-def test_loaded_question_accepts_the_framework_traits():
-    call_command("load_questionnaire", FIXTURE, stdout=StringIO())
-
-    question = Question.objects.get(question_id="Q3")
-    assert question.trait in BIG_FIVE_TRAITS

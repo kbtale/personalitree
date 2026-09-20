@@ -5,30 +5,18 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 import pytest
 
-from core.constants import BIG_FIVE_TRAITS, Framework
 from core.models import (
     DiscoveredAccount,
+    Framework,
     ProfileResult,
     Question,
     QuestionnaireResponse,
     RawScrape,
     Target,
+    Trait,
 )
 
 pytestmark = pytest.mark.django_db
-
-TRAIT = BIG_FIVE_TRAITS[0]
-
-
-def _new_question(**overrides) -> Question:
-    fields = {
-        "question_id": "Q1",
-        "framework_name": Framework.BIG_FIVE,
-        "trait": TRAIT,
-        "text": "I enjoy trying new things.",
-    }
-    fields.update(overrides)
-    return Question(**fields)
 
 
 def test_target_defaults_to_pending_status():
@@ -60,8 +48,7 @@ def test_targets_are_listed_newest_first():
     assert list(Target.objects.all()) == [newer, older]
 
 
-def test_discovered_account_is_unique_per_target_platform_and_username():
-    target = Target.objects.create(seed_username="seed_user")
+def test_discovered_account_is_unique_per_target_platform_and_username(target):
     fields = {
         "target": target,
         "platform_name": "github",
@@ -74,55 +61,81 @@ def test_discovered_account_is_unique_per_target_platform_and_username():
         DiscoveredAccount.objects.create(**fields)
 
 
-def test_question_rejects_a_trait_outside_the_framework():
-    question = _new_question(trait="Charisma")
-
-    with pytest.raises(ValidationError):
-        question.full_clean()
-
-
-def test_question_rejects_an_inverted_score_scale():
-    question = _new_question(min_score=4, max_score=2)
-
-    with pytest.raises(ValidationError):
-        question.full_clean()
-
-
-def test_question_is_unique_per_framework_and_id():
-    _new_question().save()
+def test_raw_scrape_is_unique_per_target_and_platform(target):
+    fields = {"target": target, "platform_name": "github", "raw_text_dump": "text"}
+    RawScrape.objects.create(**fields)
 
     with pytest.raises(IntegrityError), transaction.atomic():
-        _new_question().save()
+        RawScrape.objects.create(**fields)
 
 
-def test_questionnaire_response_is_unique_per_target_and_question():
-    target = Target.objects.create(seed_username="seed_user")
-    question = _new_question()
-    question.save()
-    fields = {"target": target, "question": question, "score": 3}
+def test_framework_slug_is_unique(instrument):
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Framework.objects.create(slug=instrument.slug, name="Another instrument")
+
+
+def test_trait_slug_is_unique_per_framework(instrument):
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Trait.objects.create(
+            framework=instrument,
+            slug="openness",
+            name="Openness again",
+        )
+
+
+def test_question_id_is_unique_per_framework(instrument):
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Question.objects.create(
+            framework=instrument,
+            trait=instrument.traits.first(),
+            question_id="Q1",
+            text="A second Q1.",
+        )
+
+
+def test_question_rejects_a_trait_from_another_framework(instrument):
+    other = Framework.objects.create(slug="other-instrument", name="Other")
+    foreign = Trait.objects.create(framework=other, slug="foreign", name="Foreign")
+    question = Question(
+        framework=instrument,
+        trait=foreign,
+        question_id="Q9",
+        text="Belongs to no item of this instrument.",
+    )
+
+    with pytest.raises(ValidationError):
+        question.full_clean()
+
+
+def test_question_rejects_an_inverted_scale(instrument):
+    question = Question(
+        framework=instrument,
+        trait=instrument.traits.first(),
+        question_id="Q9",
+        text="Impossible scale.",
+        min_score=4,
+        max_score=2,
+    )
+
+    with pytest.raises(ValidationError):
+        question.full_clean()
+
+
+def test_questionnaire_response_is_unique_per_target_and_question(instrument, target):
+    fields = {
+        "target": target,
+        "question": instrument.questions.get(question_id="Q1"),
+        "score": 3,
+    }
     QuestionnaireResponse.objects.create(**fields)
 
     with pytest.raises(IntegrityError), transaction.atomic():
         QuestionnaireResponse.objects.create(**fields)
 
 
-def test_profile_result_is_unique_per_target_and_framework():
-    target = Target.objects.create(seed_username="seed_user")
-    fields = {
-        "target": target,
-        "framework_name": Framework.BIG_FIVE,
-        "score_data": {},
-    }
+def test_profile_result_is_unique_per_target_and_framework(instrument, target):
+    fields = {"target": target, "framework": instrument, "score_data": {}}
     ProfileResult.objects.create(**fields)
 
     with pytest.raises(IntegrityError), transaction.atomic():
         ProfileResult.objects.create(**fields)
-
-
-def test_raw_scrape_is_unique_per_target_and_platform():
-    target = Target.objects.create(seed_username="seed_user")
-    fields = {"target": target, "platform_name": "github", "raw_text_dump": "text"}
-    RawScrape.objects.create(**fields)
-
-    with pytest.raises(IntegrityError), transaction.atomic():
-        RawScrape.objects.create(**fields)

@@ -1,52 +1,61 @@
 """
-Aggregates questionnaire answers into framework scores.
+Aggregates questionnaire answers into per-trait instrument scores.
 """
 
 import logging
 
-from core.constants import FRAMEWORK_TRAITS, Framework
 from core.exceptions import QuestionnaireError
-from core.models import ProfileResult, Question, QuestionnaireResponse, Target
+from core.models import (
+    Framework,
+    ProfileResult,
+    Question,
+    QuestionnaireResponse,
+    Target,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def calculate_framework_scores(
-    target: Target,
-    framework_name: str = Framework.BIG_FIVE,
-) -> None:
-    """Average the target's answers into one score per framework trait."""
-    traits = FRAMEWORK_TRAITS.get(framework_name)
-    if traits is None:
-        raise QuestionnaireError(f"unknown framework {framework_name}")
+def calculate_framework_scores(target: Target, framework: Framework) -> None:
+    """Average the target's answers into one entry per trait of the instrument."""
+    traits = list(framework.traits.all())
+    if not traits:
+        raise QuestionnaireError(f"{framework.slug} declares no traits to score")
 
-    totals: dict[str, int] = {}
-    counts: dict[str, int] = {}
-    responses = QuestionnaireResponse.objects.filter(target=target).select_related(
-        "question"
-    )
+    totals: dict[int, int] = {}
+    counts: dict[int, int] = {}
+    responses = QuestionnaireResponse.objects.filter(
+        target=target,
+        question__framework=framework,
+    ).select_related("question")
+
     for response in responses:
-        trait = response.question.trait
-        if trait not in traits:
-            continue
-        totals[trait] = totals.get(trait, 0) + _scored(
-            response.question, response.score
+        trait_id = response.question.trait_id
+        totals[trait_id] = totals.get(trait_id, 0) + _scored(
+            response.question,
+            response.score,
         )
-        counts[trait] = counts.get(trait, 0) + 1
+        counts[trait_id] = counts.get(trait_id, 0) + 1
 
-    scores: dict[str, float | None] = {
-        trait: totals[trait] / counts[trait] if counts.get(trait) else None
+    score_data = {
+        trait.slug: {
+            "name": trait.name,
+            "average": (
+                totals[trait.id] / counts[trait.id] if counts.get(trait.id) else None
+            ),
+            "answers": counts.get(trait.id, 0),
+        }
         for trait in traits
     }
 
     ProfileResult.objects.update_or_create(
         target=target,
-        framework_name=framework_name,
-        defaults={"score_data": scores},
+        framework=framework,
+        defaults={"score_data": score_data},
     )
     logger.info(
-        "Calculated %s scores for %s from %d answers",
-        framework_name,
+        "Scored %s for %s from %d answers",
+        framework.slug,
         target.seed_username,
         sum(counts.values()),
     )

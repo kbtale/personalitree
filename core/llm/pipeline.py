@@ -8,11 +8,10 @@ import json
 import logging
 from typing import TypedDict
 
-from core.constants import Framework
 from core.exceptions import LLMError, LLMResponseError, QuestionnaireError
 from core.llm.prompts import build_evaluation_prompt
 from core.llm.router import generate_llm_response
-from core.models import Question, QuestionnaireResponse, Target
+from core.models import Framework, Question, QuestionnaireResponse, Target
 from core.scoring.engine import calculate_framework_scores
 from core.scraper.truncation import prepare_llm_payload
 
@@ -85,15 +84,19 @@ def validate_score_items(
     return answers
 
 
-def load_questions(framework_name: str = Framework.BIG_FIVE) -> list[Question]:
-    """Return the ordered question bank for a framework, failing when empty."""
-    questions = list(
-        Question.objects.filter(framework_name=framework_name).order_by("question_id")
-    )
+def load_frameworks() -> list[Framework]:
+    """Return the active instruments, failing when nothing is loaded."""
+    frameworks = list(Framework.objects.filter(is_active=True).order_by("slug"))
+    if not frameworks:
+        raise QuestionnaireError("no active instrument; run load_questionnaire first")
+    return frameworks
+
+
+def load_questions(framework: Framework) -> list[Question]:
+    """Return the ordered items of one instrument, failing when it has none."""
+    questions = list(framework.questions.order_by("question_id"))
     if not questions:
-        raise QuestionnaireError(
-            f"no questions loaded for {framework_name}; run load_questionnaire first"
-        )
+        raise QuestionnaireError(f"{framework.slug} has no items loaded")
     return questions
 
 
@@ -105,20 +108,41 @@ async def run_evaluation_pipeline(target_id: int) -> None:
         logger.warning("No payload for target %d", target_id)
         return
 
-    questions = await asyncio.to_thread(load_questions, Framework.BIG_FIVE)
-    prompt = build_evaluation_prompt(questions)
+    frameworks = await asyncio.to_thread(load_frameworks)
 
     try:
-        response_text = await generate_llm_response(prompt, payload)
-        items = parse_score_items(response_text)
-        answers = validate_score_items(items, questions)
-        await asyncio.to_thread(_store_scores, target, answers)
-        await asyncio.to_thread(calculate_framework_scores, target, Framework.BIG_FIVE)
+        for framework in frameworks:
+            await evaluate_framework(target, framework, payload)
         await asyncio.to_thread(_mark_completed, target)
         logger.info("Evaluation pipeline complete for %s", target.seed_username)
     except LLMError:
         logger.exception("Evaluation failed for target %d", target_id)
         raise
+
+
+async def evaluate_framework(
+    target: Target,
+    framework: Framework,
+    payload: str,
+) -> None:
+    """Ask the provider about one instrument, then store its answers and scores."""
+    questions = await asyncio.to_thread(load_questions, framework)
+    prompt = build_evaluation_prompt(framework, questions)
+
+    try:
+        response_text = await generate_llm_response(prompt, payload)
+        items = parse_score_items(response_text)
+        answers = validate_score_items(items, questions)
+    except LLMError as exc:
+        raise _named(exc, framework) from exc
+
+    await asyncio.to_thread(_store_scores, target, answers)
+    await asyncio.to_thread(calculate_framework_scores, target, framework)
+
+
+def _named(error: LLMError, framework: Framework) -> LLMError:
+    """Prefix an error with the instrument it came from."""
+    return type(error)(f"{framework.slug}: {error}")
 
 
 def _store_scores(target: Target, answers: list[Answer]) -> None:

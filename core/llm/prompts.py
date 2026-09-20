@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from core.models import Question
+from core.models import Framework, Question
 
 INSTRUCTION = (
     "Evaluate the person described by the profile text. Score every item on the "
@@ -11,11 +11,16 @@ INSTRUCTION = (
 )
 
 
-def build_evaluation_prompt(questions: Sequence[Question]) -> str:
-    """Render a question bank into an evaluation prompt."""
+def build_evaluation_prompt(
+    framework: Framework,
+    questions: Sequence[Question],
+) -> str:
+    """Render one instrument into an evaluation prompt."""
     items = [
         f"- {question.question_id} ({question.min_score}-{question.max_score}): "
         f"{question.text}"
         for question in questions
     ]
-    return "\n".join([INSTRUCTION, "", "Items:", *items])
+    return "\n".join(
+        [INSTRUCTION, "", f"Instrument: {framework.name}", "Items:", *items]
+    )
