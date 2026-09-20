@@ -59,11 +59,11 @@ async def run_evaluation_pipeline(target_id: int) -> None:
         items = parse_score_items(response_text)
         await asyncio.to_thread(_store_scores, target, items)
         await asyncio.to_thread(calculate_framework_scores, target)
-        await asyncio.to_thread(_set_status, target, Target.Status.COMPLETED)
+        await asyncio.to_thread(_mark_completed, target)
         logger.info("Evaluation pipeline complete for %s", target.seed_username)
-    except LLMError as exc:
-        logger.exception("Pipeline failed for %d: %s", target_id, exc)
-        await asyncio.to_thread(_set_status, target, Target.Status.EVALUATING)
+    except LLMError:
+        logger.exception("Evaluation failed for target %d", target_id)
+        raise
 
 
 def _store_scores(target: Target, items: list[ScoreItem]) -> None:
@@ -75,6 +75,6 @@ def _store_scores(target: Target, items: list[ScoreItem]) -> None:
         )
 
 
-def _set_status(target: Target, status: Target.Status) -> None:
-    target.status = status
+def _mark_completed(target: Target) -> None:
+    target.status = Target.Status.COMPLETED
     target.save()

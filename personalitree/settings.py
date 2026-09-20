@@ -13,6 +13,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from core.constants import SCRAPE_TASK_TIMEOUT_SECONDS
+
 # ============================================================
 # 0. Paths & Environment Bootstrap
 # ============================================================
@@ -152,8 +154,10 @@ Q_CLUSTER = {
     "name": "personalitree",
     "workers": int(env("Q_WORKERS", "2")),
     "recycle": 500,  # restart worker after N tasks (leak guard)
-    "timeout": 600,  # max seconds a single task may run
-    "retry": 660,  # retry window (must be > timeout)
+    # The retry window must stay above the task timeout, otherwise the monitor
+    # re-queues a scrape that is still running.
+    "timeout": SCRAPE_TASK_TIMEOUT_SECONDS,
+    "retry": SCRAPE_TASK_TIMEOUT_SECONDS + 300,
     "compress": True,  # gzip large payloads
     "save_limit": 250,  # keep last N successful results in DB
     "queue_limit": 50,  # max tasks waiting in queue
