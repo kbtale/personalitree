@@ -35,6 +35,13 @@ python manage.py check   # Django sanity check
 `pytest` collects `tests/` against `personalitree.settings` and needs no Playwright
 browsers; browsers are only required to run the scraper itself.
 
+### Retention
+
+`RETENTION_MODE` decides what happens to raw profile text once a run finishes: `persistent` (the
+default) keeps it in the database, `ephemeral` clears the text and metadata of every scrape for the
+target as soon as the attempt ends, leaving the aggregates. `python manage.py purge_scrapes
+<target_id>` clears a target's raw text on demand, whatever the mode.
+
 ### Credential storage
 
 Burner account passwords are encrypted at rest with Fernet, so `FIELD_ENCRYPTION_KEY` has to be set

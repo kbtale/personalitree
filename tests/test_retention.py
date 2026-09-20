@@ -1,3 +1,5 @@
+from django.core.management import call_command
+from django.core.management.base import CommandError
 import pytest
 
 from core.constants import ConfigKey, RetentionMode
@@ -90,3 +92,16 @@ def test_failed_ephemeral_run_also_purges_the_text(monkeypatch, target):
 
     scrape.refresh_from_db()
     assert scrape.raw_text_dump == ""
+
+
+def test_purge_scrapes_command_clears_the_text(target):
+    _add_scrape(target)
+
+    call_command("purge_scrapes", target.pk)
+
+    assert RawScrape.objects.get(target=target).raw_text_dump == ""
+
+
+def test_purge_scrapes_reports_a_missing_target():
+    with pytest.raises(CommandError):
+        call_command("purge_scrapes", 4321)
