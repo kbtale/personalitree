@@ -1,5 +1,6 @@
 import asyncio
-import time
+
+import pytest
 
 from core.scraper import throttle
 from core.scraper.throttle import HostPacer, fetch
@@ -42,37 +43,57 @@ def test_budget_stops_requests_once_it_is_spent():
     assert pacer.requests_made("github.com") == 3
 
 
-def test_delay_spaces_out_two_requests():
+class _Clock:
+    """Monotonic clock that only moves when something sleeps, so pacing is exact."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+@pytest.fixture
+def clock(monkeypatch) -> _Clock:
+    fake = _Clock()
+    monkeypatch.setattr(throttle.time, "monotonic", fake.monotonic)
+    monkeypatch.setattr(throttle.asyncio, "sleep", fake.sleep)
+    return fake
+
+
+def test_delay_spaces_out_two_requests(clock):
     pacer = _pacer(delay=0.05)
-    started = time.monotonic()
 
     asyncio.run(pacer.wait("github.com"))
     asyncio.run(pacer.wait("github.com"))
 
-    assert time.monotonic() - started >= 0.05
+    assert clock.sleeps == [0.05]
 
 
-def test_back_off_delays_the_next_request():
+def test_back_off_delays_the_next_request(clock):
     pacer = _pacer()
     asyncio.run(pacer.wait("github.com"))
 
     pacer.back_off("github.com", 0.15)
-    started = time.monotonic()
     asyncio.run(pacer.wait("github.com"))
 
-    assert time.monotonic() - started >= 0.15
+    assert clock.sleeps == [0.15]
 
 
-def test_back_off_without_a_retry_after_header_uses_the_default(monkeypatch):
+def test_back_off_without_a_retry_after_header_uses_the_default(monkeypatch, clock):
     monkeypatch.setattr(throttle, "DEFAULT_RATE_LIMIT_BACKOFF_SECONDS", 0.1)
     pacer = _pacer()
     asyncio.run(pacer.wait("github.com"))
 
     pacer.back_off("github.com", None)
-    started = time.monotonic()
     asyncio.run(pacer.wait("github.com"))
 
-    assert time.monotonic() - started >= 0.1
+    assert clock.sleeps == [0.1]
 
 
 def test_rate_limited_statuses_are_recognised():
