@@ -103,6 +103,12 @@ class SettingsAdmin(admin.ModelAdmin):
 
 @admin.register(BurnerAccount)
 class BurnerAccountAdmin(admin.ModelAdmin):
-    list_display = ("platform_name", "username", "is_active")
+    list_display = ("platform_name", "username", "is_active", "password_stored")
     list_filter = ("platform_name", "is_active")
     search_fields = ("platform_name", "username")
+    exclude = ("password",)
+    readonly_fields = ("password_stored",)
+
+    @admin.display(boolean=True, description="Password stored")
+    def password_stored(self, obj: BurnerAccount) -> bool:
+        return bool(obj.password)
