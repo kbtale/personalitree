@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Iterable
 import logging
 import re
 from typing import TypedDict
@@ -7,7 +8,12 @@ from lxml import html as lxml_html
 from lxml.etree import ParserError
 from playwright.async_api import Error as PlaywrightError, Page
 
-from core.constants import HTTP_OK
+from core.constants import (
+    HTTP_OK,
+    MAX_DISCOVERY_CANDIDATES,
+    MAX_DISCOVERY_DEPTH,
+    PAGE_TIMEOUT_MS,
+)
 from core.models import DiscoveredAccount, Target
 from core.scraper.browser import StealthBrowser
 from core.scraper.platforms import PLATFORMS, PlatformSpec
@@ -32,6 +38,13 @@ class PlatformCandidate(TypedDict):
     page: Page
 
 
+class BioLinks(TypedDict):
+    """The URLs and handles a profile bio points at."""
+
+    urls: list[str]
+    handles: list[str]
+
+
 async def _check_platform(
     browser: StealthBrowser,
     platform: PlatformSpec,
@@ -45,7 +58,7 @@ async def _check_platform(
         response = None
         try:
             response = await page.goto(
-                url, wait_until="domcontentloaded", timeout=15000
+                url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT_MS
             )
             if response and response.status == HTTP_OK:
                 return {
@@ -95,11 +108,10 @@ async def resolve_username(
     return confirmed
 
 
-async def extract_bio_links(
-    page: Page, platform_result: PlatformCandidate
-) -> list[str]:
-    """Extract URLs and handles from a confirmed profile's bio."""
-    discovered = []
+async def extract_bio_links(page: Page, platform_result: PlatformCandidate) -> BioLinks:
+    """Extract the URLs and handles that a confirmed profile's bio points at."""
+    urls: list[str] = []
+    handles: list[str] = []
     bio_text = ""
 
     bio_selector = platform_result.get("bio_selector")
@@ -129,9 +141,6 @@ async def extract_bio_links(
         urls = URL_PATTERN.findall(bio_text)
         handles = HANDLE_PATTERN.findall(bio_text)
 
-        discovered.extend(urls)
-        discovered.extend(handles)
-
     except (PlaywrightError, ParserError) as exc:
         logger.warning(
             "Bio extraction failed for %s: %s",
@@ -141,22 +150,44 @@ async def extract_bio_links(
     finally:
         await page.close()
 
-    return discovered
+    return {"urls": urls, "handles": handles}
 
 
-async def build_discovery_tree(target_id: int, max_depth: int = 2) -> None:
+def _extend_queue(
+    queue: list[tuple[str, int]],
+    seen_usernames: set[str],
+    handles: Iterable[str],
+    depth: int,
+) -> bool:
+    """Queue unseen handles and report whether the candidate cap was reached."""
+    for handle in handles:
+        candidate = handle.lower().strip("@").strip("/")
+        if not candidate or candidate in seen_usernames:
+            continue
+        if len(seen_usernames) >= MAX_DISCOVERY_CANDIDATES:
+            return True
+        seen_usernames.add(candidate)
+        queue.append((candidate, depth + 1))
+    return False
+
+
+async def build_discovery_tree(
+    target_id: int,
+    max_depth: int = MAX_DISCOVERY_DEPTH,
+) -> None:
     """
     Main entry point for identity discovery.
-    Resolves usernames across platforms, extracts bio links,
-    and resolves inferred handles.
+    Resolves usernames across platforms, extracts bio handles,
+    and resolves inferred handles one level deeper.
     """
     target = await asyncio.to_thread(Target.objects.fetch, target_id)
     seed = target.seed_username
     seen_usernames: set[str] = {seed.lower()}
     queue: list[tuple[str, int]] = [(seed, 0)]
+    capped = False
 
     async with StealthBrowser() as browser:
-        while queue:
+        while queue and not capped:
             username, depth = queue.pop(0)
 
             if depth > max_depth:
@@ -175,13 +206,14 @@ async def build_discovery_tree(target_id: int, max_depth: int = 2) -> None:
 
                 page = result.get("page")
                 if page:
-                    new_links = await extract_bio_links(page, result)
-
-                    for link in new_links:
-                        handle = link.lower().strip("@").strip("/")
-                        if handle and handle not in seen_usernames:
-                            seen_usernames.add(handle)
-                            queue.append((handle, depth + 1))
+                    links = await extract_bio_links(page, result)
+                    if _extend_queue(queue, seen_usernames, links["handles"], depth):
+                        logger.warning(
+                            "Discovery cap of %d candidates reached for '%s'",
+                            MAX_DISCOVERY_CANDIDATES,
+                            seed,
+                        )
+                        capped = True
 
     logger.info(
         "Discovery tree complete for '%s': %d unique handles explored",
