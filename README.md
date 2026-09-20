@@ -7,29 +7,22 @@ in `pyproject.toml`: Ruff, Black, pytest, and coverage.
 
 ### Setup
 
-```bash
-python -m venv .venv
-.venv/Scripts/activate      # Windows
-source .venv/bin/activate   # Linux / macOS
-
-pip install -r requirements.txt
-pip install --group dev     # requires pip >= 25.1
-```
-
-On older pip versions, install the dev tools explicitly:
+Dependencies are declared in `pyproject.toml` and pinned in `uv.lock`. Use
+[uv](https://docs.astral.sh/uv/) so the environment matches the lock exactly:
 
 ```bash
-pip install "ruff>=0.12.0" "black>=25.1.0" pytest pytest-cov pytest-django
+uv sync            # runtime + dev dependencies into .venv
+uv sync --frozen   # exactly what the lock says, which is what CI and Docker use
 ```
 
 ### Checks
 
 ```bash
-ruff check .             # lint
-ruff format --check .    # formatting
-black --check .          # formatting, second opinion
-pytest                   # test suite with coverage
-python manage.py check   # Django sanity check
+uv run ruff check .             # lint
+uv run ruff format --check .    # formatting
+uv run black --check .          # formatting, second opinion
+uv run pytest                   # test suite with coverage
+uv run python manage.py check   # Django sanity check
 ```
 
 `pytest` collects `tests/` against `personalitree.settings` and needs no Playwright
