@@ -14,6 +14,7 @@ from django.core.exceptions import (
 from django.db.utils import OperationalError, ProgrammingError
 from playwright.async_api import (
     Browser,
+    BrowserContext,
     Error as PlaywrightError,
     Page,
     Playwright,
@@ -21,7 +22,7 @@ from playwright.async_api import (
 )
 from playwright_stealth import stealth_async
 
-from core.constants import ConfigKey
+from core.constants import CONTEXT_PAGE_LIMIT, ConfigKey
 from core.exceptions import BrowserLaunchError
 
 logger = logging.getLogger(__name__)
@@ -44,12 +45,14 @@ USER_AGENTS = [
 
 
 class StealthBrowser:
-    """Async context manager for a stealth-patched Playwright Chromium browser."""
+    """Async context manager owning one browser and a reused browsing context."""
 
     def __init__(self, proxy_url: str | None = None) -> None:
         self._proxy_url = proxy_url
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
+        self._context: BrowserContext | None = None
+        self._pages_in_context = 0
 
     async def __aenter__(self) -> "StealthBrowser":
         launch_args = self._launch_args()
@@ -70,7 +73,11 @@ class StealthBrowser:
         exc_tb: TracebackType | None,
     ) -> None:
         await self._shutdown()
-        logger.info("StealthBrowser closed")
+        logger.info(
+            "StealthBrowser closed after %d page(s) in %s context(s)",
+            self._pages_in_context,
+            "a recycled" if self._context is None else "the current",
+        )
 
     def _launch_args(self) -> dict[str, Any]:
         """Build the Chromium launch options, including the proxy when configured."""
@@ -86,7 +93,10 @@ class StealthBrowser:
         return launch_args
 
     async def _shutdown(self) -> None:
-        """Close the browser and stop the driver, tolerating partial startup."""
+        """Close the context, the browser and the driver, tolerating partial startup."""
+        if self._context:
+            await self._context.close()
+            self._context = None
         if self._browser:
             await self._browser.close()
             self._browser = None
@@ -95,14 +105,35 @@ class StealthBrowser:
             self._playwright = None
 
     async def new_page(self) -> Page:
-        """Create a new browser page with a random user-agent and stealth patches."""
-        context = await self._browser.new_context(
-            viewport=DEFAULT_VIEWPORT,
-            user_agent=random.choice(USER_AGENTS),
-        )
+        """Open a page in the reused context, with stealth patches applied."""
+        context = await self._ensure_context()
         page = await context.new_page()
         await stealth_async(page)
+        self._pages_in_context += 1
         return page
+
+    @staticmethod
+    async def close_page(page: Page) -> None:
+        """Close a page if it is still open, whatever went wrong before."""
+        if not page.is_closed():
+            await page.close()
+
+    async def _ensure_context(self) -> BrowserContext:
+        """Reuse one context, recycling it after CONTEXT_PAGE_LIMIT pages."""
+        if self._context is not None and self._pages_in_context >= CONTEXT_PAGE_LIMIT:
+            logger.info(
+                "Recycling browser context after %d pages", self._pages_in_context
+            )
+            await self._context.close()
+            self._context = None
+
+        if self._context is None:
+            self._context = await self._browser.new_context(
+                viewport=DEFAULT_VIEWPORT,
+                user_agent=random.choice(USER_AGENTS),
+            )
+            self._pages_in_context = 0
+        return self._context
 
     @staticmethod
     async def random_delay(min_s: float = 1.0, max_s: float = 3.5) -> None:
@@ -137,9 +168,14 @@ def _get_proxy_url() -> str | None:
     return None
 
 
+async def browser_options() -> dict[str, Any]:
+    """Resolve the browser options from configuration, off the event loop."""
+    return {"proxy_url": await asyncio.to_thread(_get_proxy_url)}
+
+
 @asynccontextmanager
 async def create_browser() -> AsyncIterator[StealthBrowser]:
     """Convenience factory that reads proxy config from the database."""
-    proxy = await asyncio.to_thread(_get_proxy_url)
-    async with StealthBrowser(proxy_url=proxy) as browser:
+    options = await browser_options()
+    async with StealthBrowser(**options) as browser:
         yield browser

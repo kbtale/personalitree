@@ -12,11 +12,11 @@ from core.constants import (
     HTTP_OK,
     MAX_DISCOVERY_CANDIDATES,
     MAX_DISCOVERY_DEPTH,
-    PAGE_TIMEOUT_MS,
 )
 from core.models import DiscoveredAccount, Target
-from core.scraper.browser import StealthBrowser
+from core.scraper.browser import StealthBrowser, browser_options
 from core.scraper.platforms import PLATFORMS, PlatformSpec
+from core.scraper.throttle import HostPacer, fetch
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +27,6 @@ URL_PATTERN = re.compile(r"https?://[^\s\"'<>)\]},]+", re.IGNORECASE)
 HANDLE_PATTERN = re.compile(r"(?<!\w)@([A-Za-z0-9_.]{2,30})(?!\w)")
 
 
-class PlatformCandidate(TypedDict):
-    """A username confirmed to exist on a platform, with its live page."""
-
-    platform: str
-    url: str
-    username: str
-    confidence: float
-    bio_selector: str | None
-    page: Page
-
-
 class BioLinks(TypedDict):
     """The URLs and handles a profile bio points at."""
 
@@ -45,48 +34,60 @@ class BioLinks(TypedDict):
     handles: list[str]
 
 
+class PlatformCandidate(TypedDict):
+    """A confirmed profile and the handles its bio points at."""
+
+    platform: str
+    url: str
+    username: str
+    confidence: float
+    bio_selector: str | None
+    links: BioLinks
+
+
 async def _check_platform(
     browser: StealthBrowser,
     platform: PlatformSpec,
     username: str,
     semaphore: asyncio.Semaphore,
+    pacer: HostPacer,
 ) -> PlatformCandidate | None:
-    """Check if a username exists on a single platform."""
+    """Check one platform, read the bio, and always close the page before returning."""
     url = platform["url"].format(username=username)
     async with semaphore:
         page = await browser.new_page()
-        response = None
         try:
-            response = await page.goto(
-                url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT_MS
-            )
-            if response and response.status == HTTP_OK:
-                return {
-                    "platform": platform["name"],
-                    "url": url,
-                    "username": username,
-                    "confidence": 1.0,
-                    "bio_selector": platform.get("bio_selector"),
-                    "page": page,
-                }
-            return None
+            response = await fetch(page, url, pacer)
+            if response is None or response.status != HTTP_OK:
+                return None
+
+            candidate: PlatformCandidate = {
+                "platform": platform["name"],
+                "url": url,
+                "username": username,
+                "confidence": 1.0,
+                "bio_selector": platform.get("bio_selector"),
+                "links": {"urls": [], "handles": []},
+            }
+            candidate["links"] = await extract_bio_links(page, candidate)
+            return candidate
         except PlaywrightError as exc:
             logger.debug("Failed to check %s: %s", url, exc)
             return None
         finally:
-            if not (response and response.status == HTTP_OK):
-                await page.close()
+            await StealthBrowser.close_page(page)
 
 
 async def resolve_username(
     browser: StealthBrowser,
     username: str,
+    pacer: HostPacer,
 ) -> list[PlatformCandidate]:
     """Resolve a username across all configured platforms."""
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
     tasks = [
-        _check_platform(browser, platform, username, semaphore)
+        _check_platform(browser, platform, username, semaphore, pacer)
         for platform in PLATFORMS
     ]
 
@@ -109,7 +110,7 @@ async def resolve_username(
 
 
 async def extract_bio_links(page: Page, platform_result: PlatformCandidate) -> BioLinks:
-    """Extract the URLs and handles that a confirmed profile's bio points at."""
+    """Extract the URLs and handles a bio points at; the caller owns the page."""
     urls: list[str] = []
     handles: list[str] = []
     bio_text = ""
@@ -147,8 +148,6 @@ async def extract_bio_links(page: Page, platform_result: PlatformCandidate) -> B
             platform_result["platform"],
             exc,
         )
-    finally:
-        await page.close()
 
     return {"urls": urls, "handles": handles}
 
@@ -173,12 +172,13 @@ def _extend_queue(
 
 async def build_discovery_tree(
     target_id: int,
+    pacer: HostPacer,
     max_depth: int = MAX_DISCOVERY_DEPTH,
 ) -> None:
     """
     Main entry point for identity discovery.
-    Resolves usernames across platforms, extracts bio handles,
-    and resolves inferred handles one level deeper.
+    Resolves usernames across platforms, reads the handles their bios point at,
+    and resolves those handles one level deeper.
     """
     target = await asyncio.to_thread(Target.objects.fetch, target_id)
     seed = target.seed_username
@@ -186,7 +186,8 @@ async def build_discovery_tree(
     queue: list[tuple[str, int]] = [(seed, 0)]
     capped = False
 
-    async with StealthBrowser() as browser:
+    options = await browser_options()
+    async with StealthBrowser(**options) as browser:
         while queue and not capped:
             username, depth = queue.pop(0)
 
@@ -195,7 +196,7 @@ async def build_discovery_tree(
 
             logger.info("Resolving '%s' (depth %d/%d)", username, depth, max_depth)
 
-            confirmed = await resolve_username(browser, username)
+            confirmed = await resolve_username(browser, username, pacer)
 
             for result in confirmed:
                 await asyncio.to_thread(
@@ -204,16 +205,18 @@ async def build_discovery_tree(
                     result,
                 )
 
-                page = result.get("page")
-                if page:
-                    links = await extract_bio_links(page, result)
-                    if _extend_queue(queue, seen_usernames, links["handles"], depth):
-                        logger.warning(
-                            "Discovery cap of %d candidates reached for '%s'",
-                            MAX_DISCOVERY_CANDIDATES,
-                            seed,
-                        )
-                        capped = True
+                if _extend_queue(
+                    queue,
+                    seen_usernames,
+                    result["links"]["handles"],
+                    depth,
+                ):
+                    logger.warning(
+                        "Discovery cap of %d candidates reached for '%s'",
+                        MAX_DISCOVERY_CANDIDATES,
+                        seed,
+                    )
+                    capped = True
 
     logger.info(
         "Discovery tree complete for '%s': %d unique handles explored",

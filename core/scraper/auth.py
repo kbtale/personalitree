@@ -7,6 +7,7 @@ from playwright.async_api import Error as PlaywrightError, Page
 from core.constants import PAGE_TIMEOUT_MS
 from core.models import BurnerAccount
 from core.scraper.browser import StealthBrowser
+from core.scraper.throttle import HostPacer, fetch
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,7 @@ async def detect_login_wall(page: Page) -> bool:
 async def attempt_login(
     browser: StealthBrowser,
     platform_name: str,
+    pacer: HostPacer,
 ) -> Page | None:
     """
     Attempt to log in to a platform using a BurnerAccount credential.
@@ -96,9 +98,10 @@ async def attempt_login(
 
     page = await browser.new_page()
     try:
-        await page.goto(
-            selectors["url"], wait_until="domcontentloaded", timeout=PAGE_TIMEOUT_MS
-        )
+        if await fetch(page, selectors["url"], pacer) is None:
+            logger.warning("No response from the '%s' login page", platform_name)
+            await page.close()
+            return None
         await browser.random_delay(1.5, 3.0)
 
         await page.fill(selectors["username_selector"], credential.username)
