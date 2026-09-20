@@ -1,4 +1,7 @@
+from io import StringIO
+
 from cryptography.fernet import Fernet
+from django.core.management import call_command
 from django.db import connection
 import pytest
 
@@ -108,3 +111,31 @@ def test_burner_account_password_can_be_rotated(monkeypatch):
     account.save(update_fields=["password"])
 
     assert BurnerAccount.objects.get(pk=account.pk).password == "rotated"
+
+
+def test_encrypt_burner_passwords_converts_plaintext_rows(monkeypatch):
+    _set_key(monkeypatch, KEY)
+    account = BurnerAccount.objects.create(
+        platform_name="github",
+        username="seed_user",
+        password="s3cret",
+    )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE core_burneraccount SET password = %s WHERE id = %s",
+            ["stored-in-the-clear", account.pk],
+        )
+    stdout = StringIO()
+
+    call_command("encrypt_burner_passwords", stdout=stdout)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT password FROM core_burneraccount WHERE id = %s",
+            [account.pk],
+        )
+        stored = cursor.fetchone()[0]
+
+    assert stored.startswith("gAAAAA")
+    assert BurnerAccount.objects.get(pk=account.pk).password == "stored-in-the-clear"
+    assert "1 burner account" in stdout.getvalue()

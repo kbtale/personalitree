@@ -35,6 +35,19 @@ python manage.py check   # Django sanity check
 `pytest` collects `tests/` against `personalitree.settings` and needs no Playwright
 browsers; browsers are only required to run the scraper itself.
 
+### Credential storage
+
+Burner account passwords are encrypted at rest with Fernet, so `FIELD_ENCRYPTION_KEY` has to be set
+before any credential is stored:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Changing the key makes stored passwords undecryptable; the application reports that instead of
+returning garbage. Rows written before encryption existed are read as plaintext with a warning and
+are converted by `python manage.py encrypt_burner_passwords`.
+
 ### Question bank
 
 The evaluation prompt is built from the questions stored in the database, so load a bank before
