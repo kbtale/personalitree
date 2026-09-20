@@ -124,3 +124,8 @@ A target walks `PENDING -> QUEUED -> SCRAPING -> COMPLETED`; a failed run ends o
 reason in `last_error`, and `python manage.py reset_target <target_id>` clears the attempt history
 before another try. `report_target <id> --json --out path` writes the same payload it prints.
 
+The database is local and disposable, so the schema ships as a single migration,
+`core/migrations/0001_initial.py`. When the models change, delete that file, run
+`python manage.py makemigrations core`, remove `db.sqlite3` and migrate again rather than stacking a
+second migration; migrations become additive the day there is data worth keeping.
+
