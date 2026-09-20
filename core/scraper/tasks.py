@@ -5,7 +5,7 @@ from typing import Any
 from django.db.models import F
 from playwright.async_api import Error as PlaywrightError
 
-from core.constants import MAX_SCRAPE_ATTEMPTS, PAGE_TIMEOUT_MS
+from core.constants import MAX_SCRAPE_ACCOUNTS, MAX_SCRAPE_ATTEMPTS, PAGE_TIMEOUT_MS
 from core.exceptions import PersonaliTreeError
 from core.llm.pipeline import run_evaluation_pipeline
 from core.models import DiscoveredAccount, RawScrape, Target
@@ -75,7 +75,11 @@ async def _run_pipeline(target_id: int) -> None:
     await build_discovery_tree(target_id)
 
     target = await asyncio.to_thread(Target.objects.fetch, target_id)
-    accounts = await asyncio.to_thread(list, target.discovered_accounts.all())
+    accounts = await asyncio.to_thread(
+        list,
+        target.discovered_accounts.all()[:MAX_SCRAPE_ACCOUNTS],
+    )
+    logger.info("Scraping %d accounts for target %d", len(accounts), target_id)
 
     async with create_browser() as browser:
         for account in accounts:
