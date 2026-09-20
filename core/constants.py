@@ -2,6 +2,8 @@
 
 from enum import StrEnum
 
+from django.db import models
+
 
 class ConfigKey(StrEnum):
     """Configuration keys resolved through the Settings model and environment."""
@@ -27,11 +29,16 @@ class LLMProvider(StrEnum):
     GOOGLE = "google"
 
 
+class Framework(models.TextChoices):
+    """Personality framework a question bank belongs to."""
+
+    BIG_FIVE = "Big Five", "Big Five"
+
+
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
 DEFAULT_GOOGLE_MODEL = "gemini-1.5-flash"
 
-FRAMEWORK_BIG_FIVE = "Big Five"
 BIG_FIVE_TRAITS = (
     "Openness",
     "Conscientiousness",
@@ -39,6 +46,13 @@ BIG_FIVE_TRAITS = (
     "Agreeableness",
     "Neuroticism",
 )
+
+FRAMEWORK_TRAITS: dict[str, tuple[str, ...]] = {
+    Framework.BIG_FIVE: BIG_FIVE_TRAITS,
+}
+
+SCORE_MIN = 1
+SCORE_MAX = 5
 
 HTTP_OK = 200
 CHARS_PER_TOKEN_ESTIMATE = 4
