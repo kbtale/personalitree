@@ -1,9 +1,11 @@
 from cryptography.fernet import Fernet
+from django.db import connection
 import pytest
 
 from core.constants import ConfigKey
 from core.exceptions import ConfigurationError
 from core.fields import EncryptedTextField
+from core.models import BurnerAccount
 from core.utils.crypto import decrypt_value, encrypt_value
 
 pytestmark = pytest.mark.django_db
@@ -73,3 +75,36 @@ def test_field_leaves_empty_values_alone(monkeypatch):
 
     assert field.get_prep_value("") == ""
     assert field.get_prep_value(None) is None
+
+
+def test_burner_account_password_is_ciphertext_at_rest(monkeypatch):
+    _set_key(monkeypatch, KEY)
+    account = BurnerAccount.objects.create(
+        platform_name="github",
+        username="seed_user",
+        password="s3cret",
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT password FROM core_burneraccount WHERE id = %s",
+            [account.pk],
+        )
+        stored = cursor.fetchone()[0]
+
+    assert stored != "s3cret"
+    assert BurnerAccount.objects.get(pk=account.pk).password == "s3cret"
+
+
+def test_burner_account_password_can_be_rotated(monkeypatch):
+    _set_key(monkeypatch, KEY)
+    account = BurnerAccount.objects.create(
+        platform_name="github",
+        username="seed_user",
+        password="s3cret",
+    )
+
+    account.password = "rotated"
+    account.save(update_fields=["password"])
+
+    assert BurnerAccount.objects.get(pk=account.pk).password == "rotated"

@@ -3,6 +3,7 @@ from django.db import models
 
 from core.constants import FRAMEWORK_TRAITS, SCORE_MAX, SCORE_MIN, Framework
 from core.exceptions import TargetNotFoundError
+from core.fields import EncryptedTextField
 
 
 class TargetQuerySet(models.QuerySet):
@@ -161,7 +162,7 @@ class BurnerAccount(models.Model):
 
     platform_name = models.CharField(max_length=100)
     username = models.CharField(max_length=255)
-    password = models.CharField(max_length=255)
+    password = EncryptedTextField()
     is_active = models.BooleanField(default=True)
 
     def __str__(self) -> str:
