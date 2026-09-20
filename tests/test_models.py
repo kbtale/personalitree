@@ -28,6 +28,13 @@ def test_target_str_contains_username_and_status():
     assert str(target) == "seed_user (pending)"
 
 
+def test_new_target_has_no_attempts_and_no_error():
+    target = Target.objects.create(seed_username="seed_user")
+
+    assert target.attempts == 0
+    assert target.last_error == ""
+
+
 def test_targets_are_listed_newest_first():
     older = Target.objects.create(seed_username="first")
     newer = Target.objects.create(seed_username="second")

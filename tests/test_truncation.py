@@ -53,8 +53,11 @@ def test_newest_scrapes_are_listed_first(monkeypatch, target):
 
 def test_max_posts_caps_the_number_of_scrapes(monkeypatch, target):
     _set_config(monkeypatch, MAX_SCRAPE_POSTS="1")
-    _add_scrape(target, "github", "first")
+    older = _add_scrape(target, "github", "first")
     _add_scrape(target, "reddit", "second")
+    RawScrape.objects.filter(pk=older.pk).update(
+        scraped_at=timezone.now() - timedelta(hours=1)
+    )
 
     assert truncation.prepare_llm_payload(target.id) == "[reddit]\nsecond"
 

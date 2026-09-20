@@ -21,9 +21,11 @@ class Target(models.Model):
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
+        QUEUED = "queued", "Queued"
         SCRAPING = "scraping", "Scraping"
         EVALUATING = "evaluating", "Evaluating"
         COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
 
     seed_username = models.CharField(max_length=255, db_index=True)
     status = models.CharField(
@@ -33,6 +35,8 @@ class Target(models.Model):
         db_index=True,
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    last_error = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ("-created_at",)
