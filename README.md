@@ -97,16 +97,30 @@ Goldberg, L. R. (1992). The development of markers for the Big-Five factor struc
 *Psychological Assessment, 4*, 26-42. The IPIP items are in the public domain: no fee and no
 permission required.
 
-### Running a scrape
+### Running the tool
+
+PersonaliTree is a single-user command line tool: SQLite and a local virtualenv are the default path,
+and the Docker/Postgres setup in the repo is optional. There is no web interface, no API and no admin.
 
 ```bash
 python manage.py migrate
-python manage.py queue_scrape <target_id>   # or the "Queue scraping" admin action
-python manage.py qcluster                   # second shell, consumes the queue
+python manage.py load_questionnaire banks/ipip-big-five-50.json
+
+python manage.py add_target seed_username      # creates a target
+python manage.py run_target 1                  # runs one attempt in the foreground
+python manage.py report_target 1               # prints the profile
 ```
 
-The target walks `PENDING -> QUEUED -> SCRAPING -> COMPLETED`. A run that keeps failing ends on
-`FAILED` with the reason in `last_error`; fix the cause and run
-`python manage.py reset_target <target_id>` to clear the attempt history before queueing it again.
-Inside Docker the worker is `docker compose run --rm worker python manage.py qcluster`.
+`run_target` needs no worker: it runs the pipeline in this process. The queue is still there for batch
+work, and it is the only path that retries:
+
+```bash
+python manage.py queue_scrape 1   # enqueue
+python manage.py qcluster         # consume, in a second shell (or docker compose run --rm worker ...)
+python manage.py list_targets     # see where everything stands
+```
+
+A target walks `PENDING -> QUEUED -> SCRAPING -> COMPLETED`; a failed run ends on `FAILED` with the
+reason in `last_error`, and `python manage.py reset_target <target_id>` clears the attempt history
+before another try. `report_target <id> --json --out path` writes the same payload it prints.
 
