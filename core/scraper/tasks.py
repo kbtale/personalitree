@@ -5,7 +5,7 @@ from typing import Any
 from django.db.models import F
 from playwright.async_api import Error as PlaywrightError
 
-from core.constants import MAX_SCRAPE_ATTEMPTS
+from core.constants import MAX_SCRAPE_ATTEMPTS, PAGE_TIMEOUT_MS
 from core.exceptions import PersonaliTreeError
 from core.llm.pipeline import run_evaluation_pipeline
 from core.models import DiscoveredAccount, RawScrape, Target
@@ -92,7 +92,9 @@ async def _scrape_account(
 ) -> None:
     page = await browser.new_page()
     try:
-        await page.goto(account.url, wait_until="domcontentloaded", timeout=15000)
+        await page.goto(
+            account.url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT_MS
+        )
         await browser.random_delay()
 
         if await detect_login_wall(page):
@@ -105,7 +107,9 @@ async def _scrape_account(
                     account.platform_name,
                 )
                 return
-            await page.goto(account.url, wait_until="domcontentloaded", timeout=15000)
+            await page.goto(
+                account.url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT_MS
+            )
             await browser.random_delay()
 
         content = await scrape_profile_content(browser, page, account.platform_name)

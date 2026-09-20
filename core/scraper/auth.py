@@ -4,6 +4,7 @@ from typing import TypedDict
 
 from playwright.async_api import Error as PlaywrightError, Page
 
+from core.constants import PAGE_TIMEOUT_MS
 from core.models import BurnerAccount
 from core.scraper.browser import StealthBrowser
 
@@ -95,7 +96,9 @@ async def attempt_login(
 
     page = await browser.new_page()
     try:
-        await page.goto(selectors["url"], wait_until="domcontentloaded", timeout=15000)
+        await page.goto(
+            selectors["url"], wait_until="domcontentloaded", timeout=PAGE_TIMEOUT_MS
+        )
         await browser.random_delay(1.5, 3.0)
 
         await page.fill(selectors["username_selector"], credential.username)
@@ -105,7 +108,7 @@ async def attempt_login(
         await browser.random_delay(0.5, 1.2)
 
         await page.click(selectors["submit_selector"])
-        await page.wait_for_load_state("networkidle", timeout=15000)
+        await page.wait_for_load_state("networkidle", timeout=PAGE_TIMEOUT_MS)
 
         if await detect_login_wall(page):
             logger.warning("Login failed for '%s'", platform_name)
