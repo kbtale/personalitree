@@ -146,3 +146,48 @@ def test_valid_score_array_is_parsed():
 def test_invalid_score_payloads_are_rejected(raw_response):
     with pytest.raises(LLMResponseError):
         pipeline.parse_score_items(raw_response)
+
+
+@pytest.mark.django_db
+def test_validate_score_items_matches_questions():
+    question = _add_question("Q1")
+
+    answers = pipeline.validate_score_items([{"id": "Q1", "score": 4}], [question])
+
+    assert answers == [{"question": question, "score": 4}]
+
+
+@pytest.mark.django_db
+def test_validate_score_items_rejects_unknown_ids():
+    question = _add_question("Q1")
+
+    with pytest.raises(LLMResponseError):
+        pipeline.validate_score_items([{"id": "Q9", "score": 3}], [question])
+
+
+@pytest.mark.django_db
+def test_validate_score_items_rejects_out_of_range_scores():
+    question = _add_question("Q1")
+
+    with pytest.raises(LLMResponseError):
+        pipeline.validate_score_items([{"id": "Q1", "score": 9}], [question])
+
+
+@pytest.mark.django_db
+def test_validate_score_items_rejects_duplicate_answers():
+    question = _add_question("Q1")
+
+    with pytest.raises(LLMResponseError):
+        pipeline.validate_score_items(
+            [{"id": "Q1", "score": 3}, {"id": "Q1", "score": 4}],
+            [question],
+        )
+
+
+@pytest.mark.django_db
+def test_validate_score_items_rejects_missing_answers():
+    q1 = _add_question("Q1")
+    q2 = _add_question("Q2")
+
+    with pytest.raises(LLMResponseError):
+        pipeline.validate_score_items([{"id": "Q1", "score": 3}], [q1, q2])
