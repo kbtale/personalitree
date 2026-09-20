@@ -76,7 +76,7 @@ class TargetAdmin(admin.ModelAdmin):
 
 @admin.register(DiscoveredAccount)
 class DiscoveredAccountAdmin(admin.ModelAdmin):
-    list_display = ("target", "platform_name", "username", "verification_confidence")
+    list_display = ("target", "platform_name", "username", "confidence")
     list_filter = ("platform_name",)
     search_fields = ("username", "platform_name")
 

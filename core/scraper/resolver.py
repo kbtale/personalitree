@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Iterable
+from dataclasses import dataclass
 import logging
 import re
 from typing import TypedDict
@@ -15,6 +16,13 @@ from core.constants import (
 )
 from core.models import DiscoveredAccount, Target
 from core.scraper.browser import StealthBrowser, browser_options
+from core.scraper.identity import (
+    KnownProfiles,
+    canonical_url,
+    confidence_for,
+    profile_exists,
+    signals_for,
+)
 from core.scraper.platforms import PLATFORMS, PlatformSpec
 from core.scraper.throttle import HostPacer, fetch
 
@@ -35,41 +43,80 @@ class BioLinks(TypedDict):
 
 
 class PlatformCandidate(TypedDict):
-    """A confirmed profile and the handles its bio points at."""
+    """A profile the platform proved exists, with its links and evidence."""
 
     platform: str
     url: str
     username: str
+    display_name: str
     confidence: float
+    signals: list[str]
     bio_selector: str | None
     links: BioLinks
 
 
+@dataclass
+class ProbeContext:
+    """Everything one probe shares with the rest of the run."""
+
+    browser: StealthBrowser
+    pacer: HostPacer
+    known: KnownProfiles
+    from_bio: bool
+
+
+async def _read_display_name(page: Page) -> str:
+    """Read the profile's own name, preferring og:title over the document title."""
+    meta = await page.query_selector("meta[property='og:title']")
+    if meta:
+        content = await meta.get_attribute("content")
+        if content and content.strip():
+            return content.strip()
+    title = await page.title()
+    return title.strip()
+
+
 async def _check_platform(
-    browser: StealthBrowser,
+    context: ProbeContext,
     platform: PlatformSpec,
     username: str,
     semaphore: asyncio.Semaphore,
-    pacer: HostPacer,
 ) -> PlatformCandidate | None:
-    """Check one platform, read the bio, and always close the page before returning."""
+    """Check one platform, prove the profile exists, and always close the page."""
     url = platform["url"].format(username=username)
     async with semaphore:
-        page = await browser.new_page()
+        page = await context.browser.new_page()
         try:
-            response = await fetch(page, url, pacer)
+            response = await fetch(page, url, context.pacer)
             if response is None or response.status != HTTP_OK:
+                return None
+
+            content = await page.content()
+            if not profile_exists(url, page.url, content, platform):
+                logger.debug("%s did not prove a profile exists", url)
                 return None
 
             candidate: PlatformCandidate = {
                 "platform": platform["name"],
                 "url": url,
                 "username": username,
-                "confidence": 1.0,
+                "display_name": await _read_display_name(page),
+                "confidence": 0.0,
+                "signals": [],
                 "bio_selector": platform.get("bio_selector"),
                 "links": {"urls": [], "handles": []},
             }
             candidate["links"] = await extract_bio_links(page, candidate)
+            candidate["signals"] = signals_for(
+                {
+                    "username": username,
+                    "display_name": candidate["display_name"],
+                    "bio_urls": candidate["links"]["urls"],
+                    "from_bio": context.from_bio,
+                },
+                context.known,
+            )
+            candidate["confidence"] = confidence_for(candidate["signals"])
             return candidate
         except PlaywrightError as exc:
             logger.debug("Failed to check %s: %s", url, exc)
@@ -79,15 +126,14 @@ async def _check_platform(
 
 
 async def resolve_username(
-    browser: StealthBrowser,
+    context: ProbeContext,
     username: str,
-    pacer: HostPacer,
 ) -> list[PlatformCandidate]:
     """Resolve a username across all configured platforms."""
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
     tasks = [
-        _check_platform(browser, platform, username, semaphore, pacer)
+        _check_platform(context, platform, username, semaphore)
         for platform in PLATFORMS
     ]
 
@@ -153,7 +199,7 @@ async def extract_bio_links(page: Page, platform_result: PlatformCandidate) -> B
 
 
 def _extend_queue(
-    queue: list[tuple[str, int]],
+    queue: list[tuple[str, int, bool]],
     seen_usernames: set[str],
     handles: Iterable[str],
     depth: int,
@@ -166,8 +212,28 @@ def _extend_queue(
         if len(seen_usernames) >= MAX_DISCOVERY_CANDIDATES:
             return True
         seen_usernames.add(candidate)
-        queue.append((candidate, depth + 1))
+        queue.append((candidate, depth + 1, True))
     return False
+
+
+def _known_profiles(target: Target) -> KnownProfiles:
+    """Collect what the target's confirmed rows already prove."""
+    accounts = list(target.discovered_accounts.all())
+    return {
+        "handles": {account.username.lower() for account in accounts},
+        "names": {
+            account.display_name.lower() for account in accounts if account.display_name
+        },
+        "urls": {canonical_url(account.url) for account in accounts},
+    }
+
+
+def _remember(known: KnownProfiles, result: PlatformCandidate) -> None:
+    """Add a freshly confirmed profile to what is known, for later probes."""
+    known["handles"].add(result["username"].lower())
+    if result["display_name"]:
+        known["names"].add(result["display_name"].lower())
+    known["urls"].add(canonical_url(result["url"]))
 
 
 async def build_discovery_tree(
@@ -182,21 +248,28 @@ async def build_discovery_tree(
     """
     target = await asyncio.to_thread(Target.objects.fetch, target_id)
     seed = target.seed_username
+    known = await asyncio.to_thread(_known_profiles, target)
     seen_usernames: set[str] = {seed.lower()}
-    queue: list[tuple[str, int]] = [(seed, 0)]
+    queue: list[tuple[str, int, bool]] = [(seed, 0, False)]
     capped = False
 
     options = await browser_options()
     async with StealthBrowser(**options) as browser:
         while queue and not capped:
-            username, depth = queue.pop(0)
+            username, depth, from_bio = queue.pop(0)
 
             if depth > max_depth:
                 continue
 
             logger.info("Resolving '%s' (depth %d/%d)", username, depth, max_depth)
 
-            confirmed = await resolve_username(browser, username, pacer)
+            context = ProbeContext(
+                browser=browser,
+                pacer=pacer,
+                known=known,
+                from_bio=from_bio,
+            )
+            confirmed = await resolve_username(context, username)
 
             for result in confirmed:
                 await asyncio.to_thread(
@@ -204,6 +277,7 @@ async def build_discovery_tree(
                     target,
                     result,
                 )
+                _remember(known, result)
 
                 if _extend_queue(
                     queue,
@@ -233,6 +307,8 @@ def _save_discovered_account(target: Target, result: PlatformCandidate) -> None:
         username=result["username"],
         defaults={
             "url": result["url"],
-            "verification_confidence": result["confidence"],
+            "display_name": result["display_name"],
+            "confidence": result["confidence"],
+            "signals": result["signals"],
         },
     )

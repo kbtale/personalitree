@@ -48,6 +48,19 @@ Changing the key makes stored passwords undecryptable; the application reports t
 returning garbage. Rows written before encryption existed are read as plaintext with a warning and
 are converted by `python manage.py encrypt_burner_passwords`.
 
+### Identity evidence
+
+A discovered account is only recorded when the platform proves the profile exists: the response is
+200, the page did not redirect away from the profile URL, and none of the platform's not-found markers
+appear in it. Platforms whose not-found page has no distinguishable marker fall back to a generic
+marker list plus the status and URL checks, and the row records which checks ran.
+
+Each row also carries `confidence`, the sum of the weights of the signals that were observed, and
+`signals`, the names of those signals: `handle_matches_seed` (0.40), `display_name_matches_known`
+(0.30), `bio_links_to_confirmed` (0.20) and `probed_from_confirmed_bio` (0.10). Nothing is assumed
+beyond what the page showed, so a match with no corroboration sits at 0.00 rather than pretending to
+be certain.
+
 ### Instruments
 
 An instrument is a framework with its traits and items. Load one from a file:

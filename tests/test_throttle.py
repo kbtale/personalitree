@@ -44,9 +44,9 @@ def test_budget_stops_requests_once_it_is_spent():
 
 def test_delay_spaces_out_two_requests():
     pacer = _pacer(delay=0.05)
-    asyncio.run(pacer.wait("github.com"))
-
     started = time.monotonic()
+
+    asyncio.run(pacer.wait("github.com"))
     asyncio.run(pacer.wait("github.com"))
 
     assert time.monotonic() - started >= 0.05
