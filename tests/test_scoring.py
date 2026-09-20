@@ -1,71 +1,78 @@
 import pytest
 
-from core.constants import BIG_FIVE_TRAITS, Framework
-from core.exceptions import QuestionnaireError
-from core.models import ProfileResult, Question, QuestionnaireResponse, Target
+from core.models import (
+    Framework,
+    ProfileResult,
+    Question,
+    QuestionnaireResponse,
+    Target,
+    Trait,
+)
 from core.scoring.engine import calculate_framework_scores
 
 pytestmark = pytest.mark.django_db
-
-OPENNESS = BIG_FIVE_TRAITS[0]
-CONSCIENTIOUSNESS = BIG_FIVE_TRAITS[1]
-EXTRAVERSION = BIG_FIVE_TRAITS[2]
-
-
-def _question(question_id: str, trait: str, reverse_scored: bool = False) -> Question:
-    return Question.objects.create(
-        question_id=question_id,
-        framework_name=Framework.BIG_FIVE,
-        trait=trait,
-        text=f"item {question_id}",
-        reverse_scored=reverse_scored,
-    )
 
 
 def _answer(target: Target, question: Question, score: int) -> None:
     QuestionnaireResponse.objects.create(target=target, question=question, score=score)
 
 
-def test_no_responses_stores_null_for_every_trait(target):
-    calculate_framework_scores(target)
-
-    result = ProfileResult.objects.get(target=target)
-    assert result.score_data == dict.fromkeys(BIG_FIVE_TRAITS, None)
+def _questions(instrument: Framework) -> dict[str, Question]:
+    return {question.question_id: question for question in instrument.questions.all()}
 
 
-def test_each_trait_averages_only_its_own_answers(target):
-    _answer(target, _question("Q1", OPENNESS), 2)
-    _answer(target, _question("Q2", OPENNESS), 4)
-    _answer(target, _question("Q3", CONSCIENTIOUSNESS), 5)
+def test_each_trait_scores_only_its_own_items(instrument, target):
+    questions = _questions(instrument)
+    _answer(target, questions["Q1"], 2)
+    _answer(target, questions["Q2"], 4)
+    _answer(target, questions["Q3"], 5)
 
-    calculate_framework_scores(target)
+    calculate_framework_scores(target, instrument)
 
-    scores = ProfileResult.objects.get(target=target).score_data
-    assert scores[OPENNESS] == 3.0
-    assert scores[CONSCIENTIOUSNESS] == 5.0
-    assert scores[EXTRAVERSION] is None
-
-
-def test_reverse_scored_items_are_flipped(target):
-    _answer(target, _question("Q1", OPENNESS, reverse_scored=True), 5)
-    _answer(target, _question("Q2", OPENNESS), 1)
-
-    calculate_framework_scores(target)
-
-    assert ProfileResult.objects.get(target=target).score_data[OPENNESS] == 1.0
+    scores = ProfileResult.objects.get(target=target, framework=instrument).score_data
+    assert scores["openness"]["average"] == 3.0
+    assert scores["openness"]["answers"] == 2
+    assert scores["caution"]["average"] == 1.0
+    assert scores["caution"]["answers"] == 1
 
 
-def test_second_run_updates_the_existing_row(target):
-    _answer(target, _question("Q1", OPENNESS), 2)
-    calculate_framework_scores(target)
+def test_unanswered_trait_scores_null_rather_than_zero(instrument, target):
+    calculate_framework_scores(target, instrument)
 
-    _answer(target, _question("Q2", OPENNESS), 4)
-    calculate_framework_scores(target)
-
-    assert ProfileResult.objects.filter(target=target).count() == 1
-    assert ProfileResult.objects.get(target=target).score_data[OPENNESS] == 3.0
+    scores = ProfileResult.objects.get(target=target, framework=instrument).score_data
+    assert scores["openness"] == {"name": "Openness", "average": None, "answers": 0}
 
 
-def test_unknown_framework_is_rejected(target):
-    with pytest.raises(QuestionnaireError):
-        calculate_framework_scores(target, "Enneagram")
+def test_second_run_updates_the_existing_row(instrument, target):
+    questions = _questions(instrument)
+    _answer(target, questions["Q1"], 2)
+    calculate_framework_scores(target, instrument)
+
+    _answer(target, questions["Q2"], 4)
+    calculate_framework_scores(target, instrument)
+
+    rows = ProfileResult.objects.filter(target=target, framework=instrument)
+    assert rows.count() == 1
+    assert rows.first().score_data["openness"]["average"] == 3.0
+
+
+def test_answers_from_another_instrument_are_ignored(instrument, target):
+    other = Framework.objects.create(slug="other-instrument", name="Other")
+    foreign_trait = Trait.objects.create(
+        framework=other,
+        slug="foreign",
+        name="Foreign",
+    )
+    foreign_question = Question.objects.create(
+        framework=other,
+        trait=foreign_trait,
+        question_id="Q1",
+        text="Foreign item.",
+    )
+    _answer(target, foreign_question, 5)
+    _answer(target, _questions(instrument)["Q1"], 1)
+
+    calculate_framework_scores(target, instrument)
+
+    scores = ProfileResult.objects.get(target=target, framework=instrument).score_data
+    assert scores["openness"]["average"] == 1.0

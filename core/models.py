@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from core.constants import FRAMEWORK_TRAITS, SCORE_MAX, SCORE_MIN, Framework
+from core.constants import SCORE_MAX, SCORE_MIN
 from core.exceptions import TargetNotFoundError
 from core.fields import EncryptedTextField
 
@@ -90,29 +90,74 @@ class RawScrape(models.Model):
         return f"{self.platform_name} scrape for {self.target.seed_username}"
 
 
-class Question(models.Model):
-    """A single questionnaire item evaluated by the LLM."""
+class Framework(models.Model):
+    """A loaded instrument: what it is, where it came from, and whether it runs."""
 
+    slug = models.SlugField(max_length=100, unique=True)
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+    citation = models.TextField(blank=True, default="")
+    source_url = models.URLField(max_length=500, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ("slug",)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Trait(models.Model):
+    """A trait an instrument measures; its items roll up into it."""
+
+    framework = models.ForeignKey(
+        Framework,
+        on_delete=models.CASCADE,
+        related_name="traits",
+    )
+    slug = models.SlugField(max_length=100)
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+
+    class Meta:
+        unique_together = ("framework", "slug")
+        ordering = ("slug",)
+
+    def __str__(self) -> str:
+        return f"{self.framework.slug}:{self.slug}"
+
+
+class Question(models.Model):
+    """A single instrument item evaluated by the LLM."""
+
+    framework = models.ForeignKey(
+        Framework,
+        on_delete=models.CASCADE,
+        related_name="questions",
+    )
+    trait = models.ForeignKey(
+        Trait,
+        on_delete=models.PROTECT,
+        related_name="questions",
+    )
     question_id = models.CharField(max_length=50)
-    framework_name = models.CharField(max_length=100, choices=Framework.choices)
-    trait = models.CharField(max_length=50)
     text = models.TextField()
     reverse_scored = models.BooleanField(default=False)
     min_score = models.PositiveSmallIntegerField(default=SCORE_MIN)
     max_score = models.PositiveSmallIntegerField(default=SCORE_MAX)
 
     class Meta:
-        unique_together = ("framework_name", "question_id")
+        unique_together = ("framework", "question_id")
         ordering = ("question_id",)
 
     def clean(self) -> None:
-        """Reject a trait outside the framework or an inverted score scale."""
+        """Reject an item whose trait is foreign or whose scale cannot be scored."""
         super().clean()
-        traits = FRAMEWORK_TRAITS.get(self.framework_name, ())
-        if self.trait not in traits:
-            raise ValidationError(
-                {"trait": f"'{self.trait}' is not part of {self.framework_name}"}
-            )
+        if self.trait_id and self.framework_id:
+            if self.trait.framework_id != self.framework_id:
+                raise ValidationError(
+                    {"trait": "must belong to the same framework as the item"}
+                )
         if self.min_score >= self.max_score:
             raise ValidationError({"min_score": "must be lower than max_score"})
 
@@ -170,20 +215,24 @@ class BurnerAccount(models.Model):
 
 
 class ProfileResult(models.Model):
-    """Aggregated personality framework scores."""
+    """Aggregated scores for one target on one instrument."""
 
     target = models.ForeignKey(
         Target,
         on_delete=models.CASCADE,
         related_name="profile_results",
     )
-    framework_name = models.CharField(max_length=100, choices=Framework.choices)
+    framework = models.ForeignKey(
+        Framework,
+        on_delete=models.PROTECT,
+        related_name="profile_results",
+    )
     score_data = models.JSONField(default=dict)
     generated_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("target", "framework_name")
+        unique_together = ("target", "framework")
         ordering = ("-generated_at",)
 
     def __str__(self) -> str:
-        return f"{self.framework_name} for {self.target.seed_username}"
+        return f"{self.framework.slug} for {self.target.seed_username}"
