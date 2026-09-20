@@ -20,6 +20,14 @@ class ConfigKey(StrEnum):
     MAX_SCRAPE_POSTS = "MAX_SCRAPE_POSTS"
     SCRAPE_TIMEFRAME_MONTHS = "SCRAPE_TIMEFRAME_MONTHS"
     MAX_LLM_TOKENS = "MAX_LLM_TOKENS"
+    RETENTION_MODE = "RETENTION_MODE"
+
+
+class RetentionMode(StrEnum):
+    """How long raw scrape text is kept after a run."""
+
+    PERSISTENT = "persistent"
+    EPHEMERAL = "ephemeral"
 
 
 class LLMProvider(StrEnum):
@@ -60,6 +68,7 @@ CHARS_PER_TOKEN_ESTIMATE = 4
 
 MAX_SCRAPE_ATTEMPTS = 2
 SCRAPE_TASK_TIMEOUT_SECONDS = 3600
+DEFAULT_RETENTION_MODE = RetentionMode.PERSISTENT
 
 PAGE_TIMEOUT_MS = 15000
 MAX_DISCOVERY_CANDIDATES = 50

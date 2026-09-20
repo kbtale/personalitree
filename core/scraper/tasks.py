@@ -14,6 +14,7 @@ from core.scraper.browser import StealthBrowser, create_browser
 from core.scraper.extractor import scrape_profile_content
 from core.scraper.queue import enqueue_scrape
 from core.scraper.resolver import build_discovery_tree
+from core.scraper.retention import apply_retention
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,10 @@ def scrape_target(target_id: int) -> None:
         asyncio.run(_run_pipeline(target_id))
     except PersonaliTreeError as exc:
         logger.exception("Scrape attempt failed for target %d", target_id)
+        apply_retention(target_id)
         _handle_failure(target_id, str(exc))
+    else:
+        apply_retention(target_id)
 
 
 def _start_attempt(target_id: int) -> None:
