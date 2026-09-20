@@ -8,8 +8,8 @@ import logging
 from typing import TypedDict
 
 from core.constants import Framework
-from core.exceptions import LLMError, LLMResponseError
-from core.llm.prompts import TRAIT_EVALUATION_PROMPT
+from core.exceptions import LLMError, LLMResponseError, QuestionnaireError
+from core.llm.prompts import build_evaluation_prompt
 from core.llm.router import generate_llm_response
 from core.models import Question, QuestionnaireResponse, Target
 from core.scoring.engine import calculate_framework_scores
@@ -47,6 +47,18 @@ def parse_score_items(raw_response: str) -> list[ScoreItem]:
     return items
 
 
+def load_questions(framework_name: str = Framework.BIG_FIVE) -> list[Question]:
+    """Return the ordered question bank for a framework, failing when empty."""
+    questions = list(
+        Question.objects.filter(framework_name=framework_name).order_by("question_id")
+    )
+    if not questions:
+        raise QuestionnaireError(
+            f"no questions loaded for {framework_name}; run load_questionnaire first"
+        )
+    return questions
+
+
 async def run_evaluation_pipeline(target_id: int) -> None:
     target = await asyncio.to_thread(Target.objects.fetch, target_id)
 
@@ -55,8 +67,11 @@ async def run_evaluation_pipeline(target_id: int) -> None:
         logger.warning("No payload for target %d", target_id)
         return
 
+    questions = await asyncio.to_thread(load_questions, Framework.BIG_FIVE)
+    prompt = build_evaluation_prompt(questions)
+
     try:
-        response_text = await generate_llm_response(TRAIT_EVALUATION_PROMPT, payload)
+        response_text = await generate_llm_response(prompt, payload)
         items = parse_score_items(response_text)
         await asyncio.to_thread(_store_scores, target, items)
         await asyncio.to_thread(calculate_framework_scores, target)

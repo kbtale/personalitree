@@ -21,6 +21,10 @@ class BrowserLaunchError(PersonaliTreeError):
     """Raised when the Playwright browser cannot be started."""
 
 
+class QuestionnaireError(PersonaliTreeError):
+    """Raised when the question bank cannot satisfy an evaluation."""
+
+
 class LLMError(PersonaliTreeError):
     """Base class for LLM request and response failures."""
 

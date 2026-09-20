@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from core.constants import BIG_FIVE_TRAITS, Framework
-from core.exceptions import LLMProviderError, LLMResponseError, TargetNotFoundError
+from core.exceptions import (
+    LLMProviderError,
+    LLMResponseError,
+    QuestionnaireError,
+    TargetNotFoundError,
+)
 from core.llm import pipeline
 from core.models import (
     ProfileResult,
@@ -21,6 +26,14 @@ def _add_question(question_id: str) -> Question:
         framework_name=Framework.BIG_FIVE,
         trait=BIG_FIVE_TRAITS[0],
         text="I enjoy trying new things.",
+    )
+
+
+def _add_scrape(target: Target) -> RawScrape:
+    return RawScrape.objects.create(
+        target=target,
+        platform_name="github",
+        raw_text_dump="profile text",
     )
 
 
@@ -47,13 +60,18 @@ def test_empty_payload_skips_the_evaluation(monkeypatch):
 
 
 @pytest.mark.django_db(transaction=True)
+def test_missing_question_bank_is_reported():
+    target = Target.objects.create(seed_username="seed_user")
+    _add_scrape(target)
+
+    with pytest.raises(QuestionnaireError):
+        asyncio.run(pipeline.run_evaluation_pipeline(target.id))
+
+
+@pytest.mark.django_db(transaction=True)
 def test_scores_are_stored_and_the_target_completes(monkeypatch):
     target = Target.objects.create(seed_username="seed_user")
-    RawScrape.objects.create(
-        target=target,
-        platform_name="github",
-        raw_text_dump="profile text",
-    )
+    _add_scrape(target)
     _add_question("Q1")
     _add_question("Q2")
     monkeypatch.setattr(
@@ -79,11 +97,8 @@ def test_scores_are_stored_and_the_target_completes(monkeypatch):
 @pytest.mark.django_db(transaction=True)
 def test_malformed_response_is_raised_to_the_caller(monkeypatch):
     target = Target.objects.create(seed_username="seed_user")
-    RawScrape.objects.create(
-        target=target,
-        platform_name="github",
-        raw_text_dump="profile text",
-    )
+    _add_scrape(target)
+    _add_question("Q1")
     monkeypatch.setattr(
         pipeline,
         "generate_llm_response",
@@ -99,11 +114,8 @@ def test_malformed_response_is_raised_to_the_caller(monkeypatch):
 @pytest.mark.django_db(transaction=True)
 def test_provider_failure_is_raised_to_the_caller(monkeypatch):
     target = Target.objects.create(seed_username="seed_user")
-    RawScrape.objects.create(
-        target=target,
-        platform_name="github",
-        raw_text_dump="profile text",
-    )
+    _add_scrape(target)
+    _add_question("Q1")
     monkeypatch.setattr(
         pipeline,
         "generate_llm_response",

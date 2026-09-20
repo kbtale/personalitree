@@ -35,6 +35,33 @@ python manage.py check   # Django sanity check
 `pytest` collects `tests/` against `personalitree.settings` and needs no Playwright
 browsers; browsers are only required to run the scraper itself.
 
+### Question bank
+
+The evaluation prompt is built from the questions stored in the database, so load a bank before
+running a scrape:
+
+```bash
+python manage.py load_questionnaire path/to/questions.json
+```
+
+The file is a JSON array; `question_id`, `framework_name`, `trait` and `text` are required, while
+`reverse_scored`, `min_score` and `max_score` are optional (defaults: `false`, `1`, `5`):
+
+```json
+[
+  {
+    "question_id": "Q1",
+    "framework_name": "Big Five",
+    "trait": "Openness",
+    "text": "I enjoy trying new things.",
+    "reverse_scored": false
+  }
+]
+```
+
+Items are upserted by `framework_name` and `question_id`, so re-running the command after a wording
+change updates the item without touching answers already recorded.
+
 ### Running a scrape
 
 ```bash
