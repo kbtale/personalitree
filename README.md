@@ -34,3 +34,17 @@ python manage.py check   # Django sanity check
 
 `pytest` collects `tests/` against `personalitree.settings` and needs no Playwright
 browsers; browsers are only required to run the scraper itself.
+
+### Running a scrape
+
+```bash
+python manage.py migrate
+python manage.py queue_scrape <target_id>   # or the "Queue scraping" admin action
+python manage.py qcluster                   # second shell, consumes the queue
+```
+
+The target walks `PENDING -> QUEUED -> SCRAPING -> COMPLETED`. A run that keeps failing ends on
+`FAILED` with the reason in `last_error`; fix the cause and run
+`python manage.py reset_target <target_id>` to clear the attempt history before queueing it again.
+Inside Docker the worker is `docker compose run --rm worker python manage.py qcluster`.
+

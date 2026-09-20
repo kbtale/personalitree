@@ -13,6 +13,14 @@ class TargetNotFoundError(PersonaliTreeError):
     """Raised when no Target exists for the requested id."""
 
 
+class TargetAlreadyQueuedError(PersonaliTreeError):
+    """Raised when a target already has a scrape in flight."""
+
+
+class BrowserLaunchError(PersonaliTreeError):
+    """Raised when the Playwright browser cannot be started."""
+
+
 class LLMError(PersonaliTreeError):
     """Base class for LLM request and response failures."""
 

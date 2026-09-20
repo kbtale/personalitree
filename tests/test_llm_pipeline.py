@@ -59,7 +59,7 @@ def test_scores_are_stored_and_the_target_completes(monkeypatch):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_malformed_response_restores_the_evaluating_status(monkeypatch):
+def test_malformed_response_is_raised_to_the_caller(monkeypatch):
     target = Target.objects.create(seed_username="seed_user")
     RawScrape.objects.create(
         target=target,
@@ -72,15 +72,14 @@ def test_malformed_response_restores_the_evaluating_status(monkeypatch):
         AsyncMock(return_value="not json"),
     )
 
-    asyncio.run(pipeline.run_evaluation_pipeline(target.id))
+    with pytest.raises(LLMResponseError):
+        asyncio.run(pipeline.run_evaluation_pipeline(target.id))
 
-    target.refresh_from_db()
-    assert target.status == Target.Status.EVALUATING
     assert not QuestionnaireResponse.objects.filter(target=target).exists()
 
 
 @pytest.mark.django_db(transaction=True)
-def test_provider_failure_restores_the_evaluating_status(monkeypatch):
+def test_provider_failure_is_raised_to_the_caller(monkeypatch):
     target = Target.objects.create(seed_username="seed_user")
     RawScrape.objects.create(
         target=target,
@@ -93,10 +92,8 @@ def test_provider_failure_restores_the_evaluating_status(monkeypatch):
         AsyncMock(side_effect=LLMProviderError("provider unavailable")),
     )
 
-    asyncio.run(pipeline.run_evaluation_pipeline(target.id))
-
-    target.refresh_from_db()
-    assert target.status == Target.Status.EVALUATING
+    with pytest.raises(LLMProviderError):
+        asyncio.run(pipeline.run_evaluation_pipeline(target.id))
 
 
 def test_valid_score_array_is_parsed():

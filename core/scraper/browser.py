@@ -14,6 +14,7 @@ from django.core.exceptions import (
 from django.db.utils import OperationalError, ProgrammingError
 from playwright.async_api import (
     Browser,
+    Error as PlaywrightError,
     Page,
     Playwright,
     async_playwright,
@@ -21,6 +22,7 @@ from playwright.async_api import (
 from playwright_stealth import stealth_async
 
 from core.constants import ConfigKey
+from core.exceptions import BrowserLaunchError
 
 logger = logging.getLogger(__name__)
 
@@ -50,20 +52,14 @@ class StealthBrowser:
         self._browser: Browser | None = None
 
     async def __aenter__(self) -> "StealthBrowser":
-        self._playwright = await async_playwright().start()
+        launch_args = self._launch_args()
+        try:
+            self._playwright = await async_playwright().start()
+            self._browser = await self._playwright.chromium.launch(**launch_args)
+        except PlaywrightError as exc:
+            await self._shutdown()
+            raise BrowserLaunchError(str(exc)) from exc
 
-        launch_args: dict[str, Any] = {
-            "headless": True,
-            "args": [
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-            ],
-        }
-
-        if self._proxy_url:
-            launch_args["proxy"] = {"server": self._proxy_url}
-
-        self._browser = await self._playwright.chromium.launch(**launch_args)
         logger.info("StealthBrowser launched (proxy=%s)", self._proxy_url or "none")
         return self
 
@@ -73,11 +69,30 @@ class StealthBrowser:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
+        await self._shutdown()
+        logger.info("StealthBrowser closed")
+
+    def _launch_args(self) -> dict[str, Any]:
+        """Build the Chromium launch options, including the proxy when configured."""
+        launch_args: dict[str, Any] = {
+            "headless": True,
+            "args": [
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+            ],
+        }
+        if self._proxy_url:
+            launch_args["proxy"] = {"server": self._proxy_url}
+        return launch_args
+
+    async def _shutdown(self) -> None:
+        """Close the browser and stop the driver, tolerating partial startup."""
         if self._browser:
             await self._browser.close()
+            self._browser = None
         if self._playwright:
             await self._playwright.stop()
-        logger.info("StealthBrowser closed")
+            self._playwright = None
 
     async def new_page(self) -> Page:
         """Create a new browser page with a random user-agent and stealth patches."""
