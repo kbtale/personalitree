@@ -1,0 +1,49 @@
+{
+  "framework": {
+    "slug": "mini-ipip6-24",
+    "name": "Mini-IPIP6 Big Six Markers (24 items)",
+    "description": "The 24-item Mini-IPIP6 in third-person form: an abridged Big Six measure whose sixth factor is a public-domain counterpart to Honesty-Humility.",
+    "citation": "Milojev, P., Osborne, D., Greaves, L. M., Barlow, F. K., & Sibley, C. G. (2013). The Mini-IPIP6: Tiny yet highly stable markers of Big Six personality. Journal of Research in Personality, 47, 936-944. Items from the International Personality Item Pool (ipip.ori.org), which is in the public domain.",
+    "source_url": "https://ipip.ori.org/MiniIPIP6Key.htm",
+    "is_active": true
+  },
+  "traits": [
+    { "slug": "extraversion", "name": "Extraversion" },
+    { "slug": "agreeableness", "name": "Agreeableness" },
+    { "slug": "conscientiousness", "name": "Conscientiousness" },
+    { "slug": "neuroticism", "name": "Neuroticism" },
+    { "slug": "openness", "name": "Openness to Experience" },
+    { "slug": "honesty-humility", "name": "Honesty-Humility" }
+  ],
+  "items": [
+    { "id": "M1", "trait": "extraversion", "text": "Is the life of the party." },
+    { "id": "M2", "trait": "extraversion", "text": "Talks to a lot of different people at parties." },
+    { "id": "M3", "trait": "extraversion", "text": "Doesn't talk a lot.", "reverse_scored": true },
+    { "id": "M4", "trait": "extraversion", "text": "Keeps in the background.", "reverse_scored": true },
+
+    { "id": "M5", "trait": "agreeableness", "text": "Sympathizes with others' feelings." },
+    { "id": "M6", "trait": "agreeableness", "text": "Feels others' emotions." },
+    { "id": "M7", "trait": "agreeableness", "text": "Is not really interested in others.", "reverse_scored": true },
+    { "id": "M8", "trait": "agreeableness", "text": "Is not interested in other people's problems.", "reverse_scored": true },
+
+    { "id": "M9", "trait": "conscientiousness", "text": "Gets chores done right away." },
+    { "id": "M10", "trait": "conscientiousness", "text": "Likes order." },
+    { "id": "M11", "trait": "conscientiousness", "text": "Often forgets to put things back in their proper place.", "reverse_scored": true },
+    { "id": "M12", "trait": "conscientiousness", "text": "Makes a mess of things.", "reverse_scored": true },
+
+    { "id": "M13", "trait": "neuroticism", "text": "Has frequent mood swings." },
+    { "id": "M14", "trait": "neuroticism", "text": "Gets upset easily." },
+    { "id": "M15", "trait": "neuroticism", "text": "Is relaxed most of the time.", "reverse_scored": true },
+    { "id": "M16", "trait": "neuroticism", "text": "Seldom feels blue.", "reverse_scored": true },
+
+    { "id": "M17", "trait": "openness", "text": "Has a vivid imagination." },
+    { "id": "M18", "trait": "openness", "text": "Has difficulty understanding abstract ideas.", "reverse_scored": true },
+    { "id": "M19", "trait": "openness", "text": "Is not interested in abstract ideas.", "reverse_scored": true },
+    { "id": "M20", "trait": "openness", "text": "Does not have a good imagination.", "reverse_scored": true },
+
+    { "id": "M21", "trait": "honesty-humility", "text": "Feels entitled to more of everything.", "reverse_scored": true },
+    { "id": "M22", "trait": "honesty-humility", "text": "Deserves more things in life.", "reverse_scored": true },
+    { "id": "M23", "trait": "honesty-humility", "text": "Would like to be seen driving around in a very expensive car.", "reverse_scored": true },
+    { "id": "M24", "trait": "honesty-humility", "text": "Would get a lot of pleasure from owning expensive luxury goods.", "reverse_scored": true }
+  ]
+}
