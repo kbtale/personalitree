@@ -96,3 +96,20 @@ def test_unexpected_errors_are_not_swallowed(monkeypatch):
 
 def _mark_completed(target_id: int) -> None:
     Target.objects.filter(id=target_id).update(status=Target.Status.COMPLETED)
+
+
+def test_inline_failure_records_the_target_without_requeueing(monkeypatch):
+    target = Target.objects.create(seed_username="seed_user")
+    dispatched = _stub_dispatch(monkeypatch)
+
+    async def _pipeline(target_id: int) -> None:
+        raise PersonaliTreeError("platform unreachable")
+
+    monkeypatch.setattr(tasks, "_run_pipeline", _pipeline)
+
+    tasks.run_target_inline(target.pk)
+
+    target.refresh_from_db()
+    assert target.status == Target.Status.FAILED
+    assert target.last_error == "platform unreachable"
+    assert dispatched == []

@@ -7,7 +7,7 @@ from django.core.management.base import CommandError
 import pytest
 
 from core.models import Framework, Question, QuestionnaireResponse, Target
-from core.scraper import queue
+from core.scraper import queue, tasks
 
 pytestmark = pytest.mark.django_db
 
@@ -154,3 +154,25 @@ def test_load_questionnaire_rejects_an_inverted_scale(tmp_path):
 
     with pytest.raises(CommandError):
         call_command("load_questionnaire", path)
+
+
+def test_run_target_runs_in_the_foreground(monkeypatch):
+    target = Target.objects.create(seed_username="seed_user")
+    stdout = StringIO()
+
+    async def _pipeline(target_id: int) -> None:
+        return None
+
+    monkeypatch.setattr(tasks, "_run_pipeline", _pipeline)
+
+    call_command("run_target", target.pk, stdout=stdout)
+
+    target.refresh_from_db()
+    assert target.attempts == 1
+    assert target.status == Target.Status.SCRAPING
+    assert f"Target {target.pk} is scraping" in stdout.getvalue()
+
+
+def test_run_target_reports_a_missing_target():
+    with pytest.raises(CommandError):
+        call_command("run_target", 4321)

@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 import logging
 from typing import Any
 
@@ -19,19 +20,28 @@ from core.scraper.throttle import HostPacer, fetch
 
 logger = logging.getLogger(__name__)
 
+FailureHandler = Callable[[int, str], None]
+
 
 def scrape_target(target_id: int) -> None:
-    """
-    Django Q2 task entry point.
-    Accepts a target_id, runs the full scraping pipeline, and saves results.
-    """
+    """Django Q2 entry point: a domain failure goes back to the queue."""
+    run_attempt(target_id, on_failure=_requeue_or_fail)
+
+
+def run_target_inline(target_id: int) -> None:
+    """Run one attempt here and now; a failure is recorded, never requeued."""
+    run_attempt(target_id, on_failure=_record_failure)
+
+
+def run_attempt(target_id: int, on_failure: FailureHandler) -> None:
+    """Run one attempt and hand any domain failure to the given policy."""
     _start_attempt(target_id)
     try:
         asyncio.run(_run_pipeline(target_id))
     except PersonaliTreeError as exc:
         logger.exception("Scrape attempt failed for target %d", target_id)
         apply_retention(target_id)
-        _handle_failure(target_id, str(exc))
+        on_failure(target_id, str(exc))
     else:
         apply_retention(target_id)
 
@@ -44,7 +54,16 @@ def _start_attempt(target_id: int) -> None:
     )
 
 
-def _handle_failure(target_id: int, error: str) -> None:
+def _record_failure(target_id: int, error: str) -> None:
+    """Record the failure and stop; nothing is queued behind the user's back."""
+    Target.objects.filter(id=target_id).update(
+        status=Target.Status.FAILED,
+        last_error=error,
+    )
+    logger.error("Target %d failed: %s", target_id, error)
+
+
+def _requeue_or_fail(target_id: int, error: str) -> None:
     """Re-queue the target while attempts remain, otherwise record the failure."""
     target = Target.objects.filter(id=target_id).first()
     if target is None:
