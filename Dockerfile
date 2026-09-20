@@ -1,6 +1,6 @@
 # ============================================================
-# PersonaliTree – Dockerfile
-# Builds the Python environment with Playwright browser deps
+# PersonaliTree - Dockerfile
+# Builds the Python environment from uv.lock, with Playwright
 # ============================================================
 
 FROM python:3.12-slim-bookworm
@@ -8,7 +8,10 @@ FROM python:3.12-slim-bookworm
 # ----- Environment tweaks -----
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
 
 # ----- OS-level dependencies -----
 # Build essentials + libraries required by psycopg2 and Playwright
@@ -20,12 +23,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# ----- Python dependencies -----
+# ----- uv (pinned to the version the lock was generated with) -----
+COPY --from=ghcr.io/astral-sh/uv:0.11.6 /uv /usr/local/bin/uv
+
+# ----- Python dependencies, exactly as locked -----
 WORKDIR /app
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml uv.lock /app/
+RUN uv sync --frozen --no-dev
 
 # ----- Playwright headless browsers -----
 # Install browser binaries + their OS-level dependencies
