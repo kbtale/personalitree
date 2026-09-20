@@ -1,4 +1,9 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.db.models import QuerySet
+from django.http import HttpRequest
+
+from core.exceptions import PersonaliTreeError
+from core.scraper.queue import enqueue_scrape
 
 from .models import (
     BurnerAccount,
@@ -33,15 +38,40 @@ class ProfileResultInline(admin.TabularInline):
 
 @admin.register(Target)
 class TargetAdmin(admin.ModelAdmin):
-    list_display = ("seed_username", "status", "created_at")
+    list_display = ("seed_username", "status", "attempts", "created_at")
     list_filter = ("status",)
     search_fields = ("seed_username",)
+    readonly_fields = ("attempts", "last_error")
+    actions = ("queue_scraping",)
     inlines = (
         DiscoveredAccountInline,
         RawScrapeInline,
         QuestionnaireResponseInline,
         ProfileResultInline,
     )
+
+    @admin.action(description="Queue scraping")
+    def queue_scraping(
+        self,
+        request: HttpRequest,
+        queryset: QuerySet[Target],
+    ) -> None:
+        """Queue every selected target for scraping."""
+        for target in queryset:
+            try:
+                task_id = enqueue_scrape(target)
+            except PersonaliTreeError as exc:
+                self.message_user(
+                    request,
+                    f"Target {target.pk}: {exc}",
+                    level=messages.ERROR,
+                )
+            else:
+                self.message_user(
+                    request,
+                    f"Queued task {task_id} for target {target.pk}.",
+                    level=messages.SUCCESS,
+                )
 
 
 @admin.register(DiscoveredAccount)

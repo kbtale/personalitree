@@ -3,47 +3,19 @@ import logging
 from typing import Any
 
 from django.db.models import F
-from django_q.tasks import async_task
 from playwright.async_api import Error as PlaywrightError
 
-from core.constants import MAX_SCRAPE_ATTEMPTS, SCRAPE_TASK_TIMEOUT_SECONDS
-from core.exceptions import PersonaliTreeError, TargetAlreadyQueuedError
+from core.constants import MAX_SCRAPE_ATTEMPTS
+from core.exceptions import PersonaliTreeError
 from core.llm.pipeline import run_evaluation_pipeline
 from core.models import DiscoveredAccount, RawScrape, Target
 from core.scraper.auth import attempt_login, detect_login_wall
 from core.scraper.browser import StealthBrowser, create_browser
 from core.scraper.extractor import scrape_profile_content
+from core.scraper.queue import enqueue_scrape
 from core.scraper.resolver import build_discovery_tree
 
 logger = logging.getLogger(__name__)
-
-SCRAPE_TASK_OPTIONS: dict[str, Any] = {
-    "save": True,
-    "ack_failure": True,
-    "timeout": SCRAPE_TASK_TIMEOUT_SECONDS,
-}
-
-ACTIVE_STATUSES = (
-    Target.Status.QUEUED,
-    Target.Status.SCRAPING,
-    Target.Status.EVALUATING,
-)
-
-
-def enqueue_scrape(target: Target) -> str:
-    """Queue the scraping pipeline for a target and return the task id."""
-    if target.status in ACTIVE_STATUSES:
-        raise TargetAlreadyQueuedError(f"Target {target.pk} is already {target.status}")
-
-    Target.objects.filter(id=target.pk).update(status=Target.Status.QUEUED)
-    task_id = async_task(
-        scrape_target,
-        target.pk,
-        task_name=f"scrape-target-{target.pk}",
-        q_options=SCRAPE_TASK_OPTIONS,
-    )
-    logger.info("Queued scrape task %s for target %s", task_id, target.pk)
-    return task_id
 
 
 def scrape_target(target_id: int) -> None:
