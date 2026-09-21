@@ -97,15 +97,32 @@ it can see. Items and traits are upserted by slug, and items the file no longer 
 unless they already have answers, in which case they are kept and counted. Every active instrument is
 evaluated for every target, so `is_active: false` keeps an instrument loaded without running it.
 
-`banks/ipip-big-five-50.json` ships with the repo. It is the 50-item IPIP Big Five Factor Markers key
-(Extraversion, Agreeableness, Conscientiousness, Emotional Stability, Intellect/Imagination) taken from
-the International Personality Item Pool and converted to third-person form exactly as the IPIP site
-instructs, so the items describe a person rather than asking them to describe themselves. Cite
-Goldberg, L. R. (1992). The development of markers for the Big-Five factor structure.
-*Psychological Assessment, 4*, 26-42.
+### Catalogue
+
+Two instruments ship with the repo, drawn from the International Personality Item Pool and written in
+third-person form, with their citation and source URL inside the file:
+
+| Slug | Construct | Items | Source |
+| --- | --- | --- | --- |
+| `ipip-big-five-50` | Big Five: Extraversion, Agreeableness, Conscientiousness, Emotional Stability, Intellect/Imagination | 50 | Goldberg (1992), `ipip.ori.org/New_IPIP-50-item-scale.htm` |
+| `mini-ipip6-24` | Big Six: Extraversion, Agreeableness, Conscientiousness, Neuroticism, Openness to Experience, Honesty-Humility | 24 | Milojev et al. (2013), `ipip.ori.org/MiniIPIP6Key.htm` |
+
+Load either with `python manage.py load_questionnaire banks/<file>.json`. Every active instrument is
+evaluated for every target, so both run unless you set `is_active: false` in the file, and loading a
+file again updates the same rows instead of duplicating them.
 
 `python manage.py list_frameworks` lists what is loaded: slug, name, trait and item counts, and whether
 the instrument is active.
+
+Each file keeps the keying of the page it came from:
+
+| Bank | Items per trait | Direct | Reverse-scored |
+| --- | --- | --- | --- |
+| `ipip-big-five-50` | 10 | 26 | 24 |
+| `mini-ipip6-24` | 4 | 9 | 15 |
+
+All four Honesty-Humility items are reverse-scored, so a high score there means low entitlement rather
+than agreement. Anything you supply as a file loads through the same validation.
 
 ### Running the tool
 
