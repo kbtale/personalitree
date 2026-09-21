@@ -5,6 +5,13 @@
 PersonaliTree targets Python 3.12 (see the `Dockerfile`). All tooling configuration lives
 in `pyproject.toml`: Ruff, Black, pytest, and coverage.
 
+Where things live:
+
+- `personalitree/` - settings and URL config; no HTTP surface is exposed.
+- `core/` - models, scraper, LLM pipeline, scoring and the management commands.
+- `banks/` - instrument banks, loaded with `load_questionnaire`.
+- `tests/` - the pytest suite.
+
 ### Setup
 
 Dependencies are declared in `pyproject.toml` and pinned in `uv.lock`. Use
@@ -23,6 +30,7 @@ uv run ruff format --check .    # formatting
 uv run black --check .          # formatting, second opinion
 uv run pytest                   # test suite with coverage
 uv run python manage.py check   # Django sanity check
+uv run python manage.py makemigrations --check --dry-run   # no model drift
 ```
 
 `pytest` collects `tests/` against `personalitree.settings` and needs no Playwright
@@ -94,8 +102,10 @@ evaluated for every target, so `is_active: false` keeps an instrument loaded wit
 the International Personality Item Pool and converted to third-person form exactly as the IPIP site
 instructs, so the items describe a person rather than asking them to describe themselves. Cite
 Goldberg, L. R. (1992). The development of markers for the Big-Five factor structure.
-*Psychological Assessment, 4*, 26-42. The IPIP items are in the public domain: no fee and no
-permission required.
+*Psychological Assessment, 4*, 26-42.
+
+`python manage.py list_frameworks` lists what is loaded: slug, name, trait and item counts, and whether
+the instrument is active.
 
 ### Running the tool
 
@@ -107,6 +117,7 @@ python manage.py migrate
 python manage.py load_questionnaire banks/ipip-big-five-50.json
 
 python manage.py add_target seed_username      # creates a target
+python manage.py list_frameworks               # what is loaded
 python manage.py run_target 1                  # runs one attempt in the foreground
 python manage.py report_target 1               # prints the profile
 ```
@@ -123,4 +134,3 @@ python manage.py list_targets     # see where everything stands
 A target walks `PENDING -> QUEUED -> SCRAPING -> COMPLETED`; a failed run ends on `FAILED` with the
 reason in `last_error`, and `python manage.py reset_target <target_id>` clears the attempt history
 before another try. `report_target <id> --json --out path` writes the same payload it prints.
-

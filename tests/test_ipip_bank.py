@@ -36,7 +36,7 @@ def test_the_shipped_bank_carries_its_provenance():
     framework = _load()
 
     assert framework.citation.startswith("Goldberg")
-    assert "public domain" in framework.citation
+    assert "ipip.ori.org" in framework.citation
     assert framework.source_url == "https://ipip.ori.org/New_IPIP-50-item-scale.htm"
 
 
