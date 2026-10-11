@@ -99,16 +99,19 @@ evaluated for every target, so `is_active: false` keeps an instrument loaded wit
 
 ### Catalogue
 
-Two instruments ship with the repo, drawn from the International Personality Item Pool and written in
-third-person form, with their citation and source URL inside the file:
+Three instruments ship with the repo, each with its citation and source URL inside the file:
 
 | Slug | Construct | Items | Source |
 | --- | --- | --- | --- |
 | `ipip-big-five-50` | Big Five: Extraversion, Agreeableness, Conscientiousness, Emotional Stability, Intellect/Imagination | 50 | Goldberg (1992), `ipip.ori.org/New_IPIP-50-item-scale.htm` |
 | `mini-ipip6-24` | Big Six: Extraversion, Agreeableness, Conscientiousness, Neuroticism, Openness to Experience, Honesty-Humility | 24 | Milojev et al. (2013), `ipip.ori.org/MiniIPIP6Key.htm` |
+| `oejts-1.2` | Jungian type: Extroversion, Intuition, Thinking and Perceiving against their opposite poles | 32 | Jorgenson (2015), `openpsychometrics.org/tests/OEJTS/` |
 
-Load either with `python manage.py load_questionnaire banks/<file>.json`. Every active instrument is
-evaluated for every target, so both run unless you set `is_active: false` in the file, and loading a
+The two IPIP banks are third-person statements rated for agreement; the OEJTS is 32 bipolar pairs, each
+rated 1-5 from one description to the other.
+
+Load any of them with `python manage.py load_questionnaire banks/<file>.json`. Every active instrument is
+evaluated for every target, so all three run unless you set `is_active: false` in the file, and loading a
 file again updates the same rows instead of duplicating them.
 
 `python manage.py list_frameworks` lists what is loaded: slug, name, trait and item counts, and whether
@@ -120,9 +123,13 @@ Each file keeps the keying of the page it came from:
 | --- | --- | --- | --- |
 | `ipip-big-five-50` | 10 | 26 | 24 |
 | `mini-ipip6-24` | 4 | 9 | 15 |
+| `oejts-1.2` | 8 | 17 | 15 |
 
 All four Honesty-Humility items are reverse-scored, so a high score there means low entitlement rather
-than agreement. Anything you supply as a file loads through the same validation.
+than agreement. The OEJTS reverses exactly the pairs its published key negates, which makes each
+dichotomy's average equal to the published sum over eight: its cut of 24 of 40 is an average of 3.0, and
+the four letters are read off the four averages. Anything you supply as a file loads through the same
+validation.
 
 ### Running the tool
 

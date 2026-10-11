@@ -1,0 +1,69 @@
+{
+  "framework": {
+    "slug": "oejts-1.2",
+    "name": "Open Extended Jungian Type Scales 1.2",
+    "description": "Thirty-two bipolar pairs put two descriptions at the ends of a five point scale, eight pairs per dichotomy. Each answer is scored 1-5 from the left description to the right one; the eight pairs of a dichotomy are averaged after reversing the pairs the source keys negatively, which reproduces the published sum exactly. The published cut of 24 of 40 points is therefore an average of 3.0: above it reads Extroversion, Intuition, Thinking or Perceiving, below it reads the opposite pole. Read the four letters together for the type, for example I, S, F, P gives ISFP.",
+    "citation": "Jorgenson, E. (2015). Open Extended Jungian Type Scales 1.2. openpsychometrics.org/tests/OEJTS/",
+    "source_url": "https://openpsychometrics.org/tests/OEJTS/development/OEJTS1.2.pdf",
+    "is_active": true
+  },
+  "traits": [
+    {
+      "slug": "ie",
+      "name": "Extroversion",
+      "description": "Extroversion over Introversion, the IE scale. Published sum: 30 - Q3 - Q7 - Q11 + Q15 - Q19 + Q23 + Q27 - Q31, read as Extroversion above 24 of 40."
+    },
+    {
+      "slug": "sn",
+      "name": "Intuition",
+      "description": "Intuition over Sensing, the SN scale. Published sum: 12 + Q4 + Q8 + Q12 + Q16 + Q20 - Q24 - Q28 + Q32, read as Intuition above 24 of 40."
+    },
+    {
+      "slug": "ft",
+      "name": "Thinking",
+      "description": "Thinking over Feeling, the FT scale. Published sum: 30 - Q2 + Q6 + Q10 - Q14 - Q18 + Q22 - Q26 - Q30, read as Thinking above 24 of 40."
+    },
+    {
+      "slug": "jp",
+      "name": "Perceiving",
+      "description": "Perceiving over Judging, the JP scale. Published sum: 18 + Q1 + Q5 - Q9 + Q13 - Q17 + Q21 - Q25 + Q29, read as Perceiving above 24 of 40."
+    }
+  ],
+  "items": [
+    { "id": "Q3", "trait": "ie", "text": "bored by time alone (1) to needs time alone (5)", "reverse_scored": true },
+    { "id": "Q7", "trait": "ie", "text": "energetic (1) to mellow (5)", "reverse_scored": true },
+    { "id": "Q11", "trait": "ie", "text": "works best in groups (1) to works best alone (5)", "reverse_scored": true },
+    { "id": "Q15", "trait": "ie", "text": "gets worn out by parties (1) to gets fired up by parties (5)" },
+    { "id": "Q19", "trait": "ie", "text": "talks more (1) to listens more (5)", "reverse_scored": true },
+    { "id": "Q23", "trait": "ie", "text": "stays at home (1) to goes out on the town (5)" },
+    { "id": "Q27", "trait": "ie", "text": "finds it difficult to yell very loudly (1) to yelling to others when they are far away comes naturally (5)" },
+    { "id": "Q31", "trait": "ie", "text": "likes to perform in front of other people (1) to avoids public speaking (5)", "reverse_scored": true },
+
+    { "id": "Q4", "trait": "sn", "text": "accepts things as they are (1) to unsatisfied with the ways things are (5)" },
+    { "id": "Q8", "trait": "sn", "text": "prefer to take multiple choice test (1) to prefer essay answers (5)" },
+    { "id": "Q12", "trait": "sn", "text": "focused on the present (1) to focused on the future (5)" },
+    { "id": "Q16", "trait": "sn", "text": "fits in (1) to stands out (5)" },
+    { "id": "Q20", "trait": "sn", "text": "when describing an event, will tell people what happened (1) to when describing an event, will tell people what it meant (5)" },
+    { "id": "Q24", "trait": "sn", "text": "wants the big picture (1) to wants the details (5)", "reverse_scored": true },
+    { "id": "Q28", "trait": "sn", "text": "theoretical (1) to empirical (5)", "reverse_scored": true },
+    { "id": "Q32", "trait": "sn", "text": "likes to know \"who?\", \"what?\", \"when?\" (1) to likes to know \"why?\" (5)" },
+
+    { "id": "Q2", "trait": "ft", "text": "sceptical (1) to wants to believe (5)", "reverse_scored": true },
+    { "id": "Q6", "trait": "ft", "text": "thinks \"robotic\" is an insult (1) to strives to have a mechanical mind (5)" },
+    { "id": "Q10", "trait": "ft", "text": "easily hurt (1) to thick-skinned (5)" },
+    { "id": "Q14", "trait": "ft", "text": "wants people's respect (1) to wants their love (5)", "reverse_scored": true },
+    { "id": "Q18", "trait": "ft", "text": "wants to be good at fixing things (1) to wants to be good at fixing people (5)", "reverse_scored": true },
+    { "id": "Q22", "trait": "ft", "text": "follows the heart (1) to follows the head (5)" },
+    { "id": "Q26", "trait": "ft", "text": "bases morality on justice (1) to bases morality on compassion (5)", "reverse_scored": true },
+    { "id": "Q30", "trait": "ft", "text": "uncomfortable with emotions (1) to values emotions (5)", "reverse_scored": true },
+
+    { "id": "Q1", "trait": "jp", "text": "makes lists (1) to relies on memory (5)" },
+    { "id": "Q5", "trait": "jp", "text": "keeps a clean room (1) to just puts stuff where ever (5)" },
+    { "id": "Q9", "trait": "jp", "text": "chaotic (1) to organized (5)", "reverse_scored": true },
+    { "id": "Q13", "trait": "jp", "text": "plans far ahead (1) to plans at the last minute (5)" },
+    { "id": "Q17", "trait": "jp", "text": "keeps options open (1) to commits (5)", "reverse_scored": true },
+    { "id": "Q21", "trait": "jp", "text": "gets work done right away (1) to procrastinates (5)" },
+    { "id": "Q25", "trait": "jp", "text": "improvises (1) to prepares (5)", "reverse_scored": true },
+    { "id": "Q29", "trait": "jp", "text": "works hard (1) to plays hard (5)" }
+  ]
+}
