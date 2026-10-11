@@ -1,13 +1,16 @@
 from io import StringIO
 import json
+from pathlib import Path
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
 import pytest
 
-from core.models import DiscoveredAccount, ProfileResult, Target
+from core.models import DiscoveredAccount, Framework, ProfileResult, Target
 
 pytestmark = pytest.mark.django_db
+
+BANK = Path(__file__).resolve().parent.parent / "banks" / "oejts-1.2.json"
 
 
 def test_list_frameworks_reports_what_is_loaded(instrument):
@@ -135,6 +138,83 @@ def test_report_target_writes_the_output_to_a_file(instrument, target, tmp_path)
     written = json.loads(path.read_text(encoding="utf-8"))
     assert written["target"]["username"] == "seed_user"
     assert written["instruments"][0]["slug"] == "sample-instrument"
+
+
+def _oejts_target(**traits: tuple[str, float | None]) -> Target:
+    """Load the OEJTS bank and record a profile with the averages passed in."""
+    call_command("load_questionnaire", BANK, stdout=StringIO())
+    framework = Framework.objects.get(slug="oejts-1.2")
+    target = Target.objects.create(seed_username="oejts-report")
+    ProfileResult.objects.create(
+        target=target,
+        framework=framework,
+        score_data={
+            slug: {"name": name, "average": average, "answers": 8}
+            for slug, (name, average) in traits.items()
+        },
+    )
+    return target
+
+
+def test_report_target_prints_the_letters_and_the_type():
+    target = _oejts_target(
+        ie=("Extroversion", 4.0),
+        sn=("Intuition", 3.5),
+        ft=("Thinking", 2.0),
+        jp=("Perceiving", 5.0),
+    )
+    stdout = StringIO()
+
+    call_command("report_target", target.pk, stdout=stdout)
+
+    output = stdout.getvalue()
+    assert "Extroversion: 4.00 (8 answer(s)) [E]" in output
+    assert "Thinking: 2.00 (8 answer(s)) [F]" in output
+    assert "type: ENFP" in output
+
+
+def test_report_target_withholds_the_type_while_a_trait_is_unanswered():
+    target = _oejts_target(
+        ie=("Extroversion", 4.0),
+        sn=("Intuition", 4.0),
+        ft=("Thinking", 4.0),
+        jp=("Perceiving", None),
+    )
+    stdout = StringIO()
+
+    call_command("report_target", target.pk, stdout=stdout)
+
+    output = stdout.getvalue()
+    assert "type: unavailable - 1 trait(s) have no answers" in output
+    assert "Perceiving: no answers (8 answer(s))" in output
+
+
+def test_report_target_json_carries_the_type_and_the_letters():
+    target = _oejts_target(ie=("Extroversion", 4.0), sn=("Intuition", None))
+    stdout = StringIO()
+
+    call_command("report_target", target.pk, "--json", stdout=stdout)
+
+    instrument = json.loads(stdout.getvalue())["instruments"][0]
+    assert instrument["type"] is None
+    assert instrument["type_declared"] is True
+    assert instrument["traits"]["ie"]["label"] == "E"
+    assert "label" not in instrument["traits"]["sn"]
+
+
+def test_report_target_leaves_an_instrument_without_labels_plain(instrument, target):
+    ProfileResult.objects.create(
+        target=target,
+        framework=instrument,
+        score_data={"openness": {"name": "Openness", "average": 4.0, "answers": 2}},
+    )
+    stdout = StringIO()
+
+    call_command("report_target", target.pk, stdout=stdout)
+
+    output = stdout.getvalue()
+    assert "Openness: 4.00 (2 answer(s))" in output
+    assert "type" not in output
 
 
 def test_report_target_reports_a_missing_target():

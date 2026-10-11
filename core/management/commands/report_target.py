@@ -7,7 +7,8 @@ from typing import Any
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
 from core.exceptions import PersonaliTreeError
-from core.models import Framework, Target
+from core.models import Framework, ProfileResult, Target
+from core.scoring.type_code import letter, scale_midpoint, type_code
 
 
 class Command(BaseCommand):
@@ -50,20 +51,10 @@ def build_payload(target: Target) -> dict[str, Any]:
         result.framework.slug: result
         for result in target.profile_results.select_related("framework")
     }
-    instruments = []
-    for framework in Framework.objects.order_by("slug"):
-        result = results.get(framework.slug)
-        instruments.append(
-            {
-                "slug": framework.slug,
-                "name": framework.name,
-                "citation": framework.citation,
-                "source_url": framework.source_url,
-                "is_active": framework.is_active,
-                "evaluated": result is not None,
-                "traits": result.score_data if result else {},
-            }
-        )
+    instruments = [
+        _instrument(framework, results.get(framework.slug))
+        for framework in Framework.objects.order_by("slug")
+    ]
 
     accounts = [
         {
@@ -91,6 +82,60 @@ def build_payload(target: Target) -> dict[str, Any]:
     }
 
 
+def _instrument(
+    framework: Framework,
+    result: ProfileResult | None,
+) -> dict[str, Any]:
+    """One instrument's entry, with the letters its traits read as."""
+    scores = result.score_data if result else {}
+    traits = list(framework.traits.all())
+    midpoint = scale_midpoint(framework)
+    labels: dict[str, str | None] = {}
+    if midpoint is not None:
+        for trait in traits:
+            average = (scores.get(trait.slug) or {}).get("average")
+            labels[trait.slug] = letter(trait, average, midpoint)
+
+    return {
+        "slug": framework.slug,
+        "name": framework.name,
+        "citation": framework.citation,
+        "source_url": framework.source_url,
+        "is_active": framework.is_active,
+        "evaluated": result is not None,
+        "type": type_code(framework, scores),
+        "type_declared": bool(traits)
+        and all(trait.high_label and trait.low_label for trait in traits),
+        "traits": _annotate(scores, labels),
+    }
+
+
+def _annotate(
+    scores: dict[str, Any],
+    labels: dict[str, str | None],
+) -> dict[str, Any]:
+    """The trait entries, each carrying the letter it reads as when there is one."""
+    annotated = {}
+    for slug, score in scores.items():
+        entry = dict(score)
+        if labels.get(slug):
+            entry["label"] = labels[slug]
+        annotated[slug] = entry
+    return annotated
+
+
+def _type_lines(instrument: dict[str, Any]) -> list[str]:
+    """The type line: the code, why it is missing, or nothing at all."""
+    if instrument["type"]:
+        return [f"    type: {instrument['type']}"]
+    if not instrument["type_declared"]:
+        return []
+    unanswered = sum(
+        1 for score in instrument["traits"].values() if score["average"] is None
+    )
+    return [f"    type: unavailable - {unanswered} trait(s) have no answers"]
+
+
 def render_text(payload: dict[str, Any]) -> str:
     """A terminal-readable rendering of the payload."""
     target = payload["target"]
@@ -114,7 +159,11 @@ def render_text(payload: dict[str, Any]) -> str:
         for score in instrument["traits"].values():
             average = score["average"]
             shown = "no answers" if average is None else f"{average:.2f}"
-            lines.append(f"    {score['name']}: {shown} ({score['answers']} answer(s))")
+            label = f" [{score['label']}]" if score.get("label") else ""
+            lines.append(
+                f"    {score['name']}: {shown} ({score['answers']} answer(s)){label}"
+            )
+        lines.extend(_type_lines(instrument))
 
     lines.append("Discovered accounts")
     if not payload["accounts"]:

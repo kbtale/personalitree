@@ -129,8 +129,11 @@ Each file keeps the keying of the page it came from:
 All four Honesty-Humility items are reverse-scored, so a high score there means low entitlement rather
 than agreement. The OEJTS reverses exactly the pairs its published key negates, which makes each
 dichotomy's average equal to the published sum over eight: its cut of 24 of 40 is an average of 3.0, and
-the four letters are read off the four averages. Anything you supply as a file loads through the same
-validation.
+the four letters are read off the four averages. `report_target` prints them: each dichotomy shows the
+letter it reads as, and the instrument gets a `type:` line with the letters joined, for example
+`ISFJ`. An instrument whose traits declare no `high_label`/`low_label` prints neither, and a dichotomy
+with no answers withholds the type rather than guessing a side. Anything you supply as a file loads
+through the same validation.
 
 ### Running the tool
 
