@@ -6,7 +6,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 import pytest
 
-from core.models import Framework, Question, QuestionnaireResponse, Target
+from core.models import Framework, Question, QuestionnaireResponse, Target, Trait
 from core.scraper import queue, tasks
 
 pytestmark = pytest.mark.django_db
@@ -150,6 +150,79 @@ def test_load_questionnaire_rejects_an_inverted_scale(tmp_path):
     document = json.loads(FIXTURE.read_text(encoding="utf-8"))
     document["items"][0]["min_score"] = 5
     document["items"][0]["max_score"] = 1
+    path = _write(tmp_path, document)
+
+    with pytest.raises(CommandError):
+        call_command("load_questionnaire", path)
+
+
+def test_load_questionnaire_reads_traits_in_file_order_with_their_labels(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    document["traits"] = [
+        {"slug": "ie", "name": "Extroversion", "high_label": "E", "low_label": "I"},
+        {"slug": "jp", "name": "Perceiving", "high_label": "P", "low_label": "J"},
+    ]
+    document["items"] = [
+        {"id": "Q1", "trait": "ie", "text": "Talks first."},
+        {"id": "Q2", "trait": "jp", "text": "Keeps options open."},
+    ]
+
+    call_command("load_questionnaire", _write(tmp_path, document), stdout=StringIO())
+
+    traits = list(Framework.objects.get().traits.all())
+    assert [trait.slug for trait in traits] == ["ie", "jp"]
+    assert [trait.position for trait in traits] == [1, 2]
+    assert (traits[0].high_label, traits[0].low_label) == ("E", "I")
+
+
+def test_load_questionnaire_accepts_a_bank_without_labels():
+    call_command("load_questionnaire", FIXTURE, stdout=StringIO())
+
+    assert set(Trait.objects.values_list("high_label", flat=True)) == {""}
+    assert set(Trait.objects.values_list("low_label", flat=True)) == {""}
+
+
+def test_load_questionnaire_clears_labels_a_later_file_drops(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    for index, trait in enumerate(document["traits"]):
+        trait["high_label"] = f"H{index}"
+        trait["low_label"] = f"L{index}"
+    call_command("load_questionnaire", _write(tmp_path, document), stdout=StringIO())
+
+    for trait in document["traits"]:
+        trait.pop("high_label")
+        trait.pop("low_label")
+    call_command("load_questionnaire", _write(tmp_path, document), stdout=StringIO())
+
+    assert set(Trait.objects.values_list("high_label", flat=True)) == {""}
+
+
+def test_load_questionnaire_rejects_a_trait_with_one_label(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    document["traits"][0]["high_label"] = "E"
+    path = _write(tmp_path, document)
+
+    with pytest.raises(CommandError):
+        call_command("load_questionnaire", path)
+
+    assert Framework.objects.count() == 0
+
+
+def test_load_questionnaire_rejects_the_same_label_on_both_sides(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    for trait in document["traits"]:
+        trait["high_label"] = "E"
+        trait["low_label"] = "E"
+    path = _write(tmp_path, document)
+
+    with pytest.raises(CommandError):
+        call_command("load_questionnaire", path)
+
+
+def test_load_questionnaire_rejects_labels_on_some_traits_only(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    document["traits"][0]["high_label"] = "E"
+    document["traits"][0]["low_label"] = "I"
     path = _write(tmp_path, document)
 
     with pytest.raises(CommandError):

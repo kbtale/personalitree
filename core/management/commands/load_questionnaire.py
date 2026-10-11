@@ -20,7 +20,7 @@ FRAMEWORK_FIELDS = (
     "is_active",
 )
 FRAMEWORK_REQUIRED = ("slug", "name")
-TRAIT_FIELDS = ("slug", "name", "description")
+TRAIT_FIELDS = ("slug", "name", "description", "high_label", "low_label")
 TRAIT_REQUIRED = ("slug", "name")
 ITEM_FIELDS = ("id", "trait", "text", "reverse_scored", "min_score", "max_score")
 ITEM_REQUIRED = ("id", "trait", "text")
@@ -126,6 +126,23 @@ class Command(BaseCommand):
         if repeated:
             raise CommandError(f"duplicate item ids: {', '.join(repeated)}")
 
+        labelled = [trait for trait in traits if trait.get("high_label", "").strip()]
+        if labelled and len(labelled) != len(traits):
+            raise CommandError(
+                "declare high_label and low_label for every trait or for none"
+            )
+        for trait in traits:
+            high = trait.get("high_label", "").strip()
+            low = trait.get("low_label", "").strip()
+            if bool(high) != bool(low):
+                raise CommandError(
+                    f"trait {trait['slug']} declares only one of high_label, low_label"
+                )
+            if high and high == low:
+                raise CommandError(
+                    f"trait {trait['slug']} uses '{high}' for both labels"
+                )
+
         for item in items:
             low = item.get("min_score", SCORE_MIN)
             high = item.get("max_score", SCORE_MAX)
@@ -146,11 +163,15 @@ class Command(BaseCommand):
     ) -> tuple[int, int]:
         created = 0
         updated = 0
-        for values in traits:
+        for position, values in enumerate(traits, start=1):
+            defaults = {key: value for key, value in values.items() if key != "slug"}
+            defaults["position"] = position
+            defaults["high_label"] = values.get("high_label", "").strip()
+            defaults["low_label"] = values.get("low_label", "").strip()
             _, was_created = Trait.objects.update_or_create(
                 framework=framework,
                 slug=values["slug"],
-                defaults={key: value for key, value in values.items() if key != "slug"},
+                defaults=defaults,
             )
             created += int(was_created)
             updated += int(not was_created)

@@ -78,9 +78,10 @@ python manage.py load_questionnaire banks/ipip-big-five-50.json
 ```
 
 The file is a JSON object. `framework` needs `slug` and `name`, plus any of `description`, `citation`,
-`source_url` and `is_active`. `traits` is a non-empty list of `slug`/`name` pairs, and `items` is a
-non-empty list of `id`, `trait`, `text` with optional `reverse_scored`, `min_score` and `max_score`
-(defaults `false`, `1` and `5`):
+`source_url` and `is_active`. `traits` is a non-empty list of `slug`/`name` pairs, in the order the
+instrument reads them, each optionally with `description` and the two sides of a dichotomy as
+`high_label` and `low_label`; `items` is a non-empty list of `id`, `trait`, `text` with optional
+`reverse_scored`, `min_score` and `max_score` (defaults `false`, `1` and `5`):
 
 ```json
 {
