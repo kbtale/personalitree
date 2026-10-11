@@ -118,3 +118,18 @@ def test_the_published_cut_is_an_average_of_three():
     for slug in PUBLISHED_KEY:
         assert result.score_data[slug]["average"] == 3.0
         assert _published_sum(slug, lambda item_id: 3) == CUT
+
+
+def test_the_shipped_bank_declares_its_letters_in_type_order():
+    framework = _load()
+
+    traits = list(framework.traits.all())
+
+    assert [trait.slug for trait in traits] == ["ie", "sn", "ft", "jp"]
+    assert [trait.position for trait in traits] == [1, 2, 3, 4]
+    assert [(trait.high_label, trait.low_label) for trait in traits] == [
+        ("E", "I"),
+        ("N", "S"),
+        ("T", "F"),
+        ("P", "J"),
+    ]

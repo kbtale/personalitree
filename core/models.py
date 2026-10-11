@@ -120,10 +120,13 @@ class Trait(models.Model):
     slug = models.SlugField(max_length=100)
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True, default="")
+    position = models.PositiveSmallIntegerField(default=0)
+    high_label = models.CharField(max_length=16, blank=True, default="")
+    low_label = models.CharField(max_length=16, blank=True, default="")
 
     class Meta:
         unique_together = ("framework", "slug")
-        ordering = ("slug",)
+        ordering = ("position", "slug")
 
     def __str__(self) -> str:
         return f"{self.framework.slug}:{self.slug}"
